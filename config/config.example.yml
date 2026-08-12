@@ -392,6 +392,24 @@ https_only: false
 #  logout_url: "https://auth.example.com/logout"
 
 ##
+## Playlist-backed feeds (ArikTube extension).
+##
+## When set, the Trending and/or Popular feed serves the content of these
+## local PUBLIC playlists instead of the stock feed. Playlists merge in
+## the listed order, each in its own order, duplicates dropped. The swap
+## is at the data layer, so /api/v1/trending and /api/v1/popular serve
+## the same items — API clients need no changes. Missing or non-public
+## playlists are skipped and logged. Trending category tabs and region
+## are ignored while a list is set.
+##
+## Default: [] (stock feeds)
+##
+#trending_playlists:
+#  - IVPLxxxxxxxxxxxxxxxxxxxx
+#popular_playlists:
+#  - IVPLxxxxxxxxxxxxxxxxxxxx
+
+##
 ## Enable/Disable the captcha challenge on the login page.
 ##
 ## Note: this is a basic captcha challenge that doesn't

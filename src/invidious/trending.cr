@@ -1,4 +1,12 @@
 def fetch_trending(trending_type, region, locale)
+  # ArikTube: playlist-backed Trending. Category tabs and region are
+  # ignored on purpose — the owner's list is the feed.
+  unless CONFIG.trending_playlists.empty?
+    plids = CONFIG.trending_playlists
+    plid = plids.size == 1 ? plids[0] : nil
+    return {Invidious::PlaylistFeeds.feed_videos(plids), plid}
+  end
+
   region ||= "US"
   region = region.upcase
 

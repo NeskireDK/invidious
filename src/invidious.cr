@@ -193,6 +193,11 @@ Invidious::Jobs.register Invidious::Jobs::InstanceListRefreshJob.new
 Invidious::Jobs.start_all
 
 def popular_videos
+  # ArikTube: playlist-backed Popular
+  unless CONFIG.popular_playlists.empty?
+    return Invidious::PlaylistFeeds.feed_videos(CONFIG.popular_playlists)
+  end
+
   Invidious::Jobs::PullPopularVideosJob::POPULAR_VIDEOS.get
 end
 

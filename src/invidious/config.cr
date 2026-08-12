@@ -147,6 +147,11 @@ class Config
   # Subscribe to channels using PubSubHubbub (requires domain, hmac_key)
   property use_pubsub_feeds : Bool | Int32 = false
   property popular_enabled : Bool = true
+  # Playlist-backed feeds (ArikTube extension): when set, the Trending or
+  # Popular feed serves these local PUBLIC playlists (merged in order,
+  # duplicates dropped) instead of the stock feed content.
+  property trending_playlists : Array(String) = [] of String
+  property popular_playlists : Array(String) = [] of String
   property captcha_enabled : Bool = true
   property login_enabled : Bool = true
   property registration_enabled : Bool = true
