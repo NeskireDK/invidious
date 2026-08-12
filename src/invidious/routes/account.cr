@@ -23,6 +23,8 @@ module Invidious::Routes::Account
     sid = sid.as(String)
     csrf_token = generate_response(sid, {":change_password"}, HMAC_KEY)
 
+    sso_verified = Invidious::TrustedHeaderAuth.asserted_email(env) == user.email
+
     templated "user/change_password"
   end
 
@@ -48,8 +50,13 @@ module Invidious::Routes::Account
       return error_template(400, ex)
     end
 
+    # An SSO session proves the identity through the trusted header already, so
+    # the current password is waived. Accounts provisioned by SSO were given a
+    # random password the user never saw and could never type here.
+    sso_verified = Invidious::TrustedHeaderAuth.asserted_email(env) == user.email
+
     password = env.params.body["password"]?
-    if password.nil? || password.empty?
+    if !sso_verified && (password.nil? || password.empty?)
       return error_template(401, "Password is a required field")
     end
 
@@ -68,8 +75,10 @@ module Invidious::Routes::Account
       return error_template(400, "Password cannot be longer than 55 characters")
     end
 
-    if !Crypto::Bcrypt::Password.new(user.password.not_nil!).verify(password.byte_slice(0, 55))
-      return error_template(401, "Incorrect password")
+    if !sso_verified
+      if !Crypto::Bcrypt::Password.new(user.password.not_nil!).verify(password.not_nil!.byte_slice(0, 55))
+        return error_template(401, "Incorrect password")
+      end
     end
 
     new_password = Crypto::Bcrypt::Password.create(new_password, cost: 10)
