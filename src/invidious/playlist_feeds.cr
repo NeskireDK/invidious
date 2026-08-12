@@ -13,7 +13,7 @@ module Invidious::PlaylistFeeds
   # in its own order, duplicates dropped. Missing or non-public playlists
   # are skipped with a log line so one bad entry cannot break the feed.
   def feed_videos(plids : Array(String)) : Array(SearchVideo)
-    videos = [] of SearchVideo
+    playlist_videos = [] of PlaylistVideo
     seen = Set(String).new
 
     plids.each do |plid|
@@ -30,23 +30,42 @@ module Invidious::PlaylistFeeds
       Invidious::Database::PlaylistVideos.select(plid, playlist.index, 0, limit: 200).each do |video|
         next if seen.includes?(video.id)
         seen << video.id
-        videos << as_search_video(video)
+        playlist_videos << video
       end
     end
 
-    videos
+    views = view_counts(seen.to_a)
+    playlist_videos.map { |video| as_search_video(video, views[video.id]? || 0_i64) }
   end
 
-  # PlaylistVideo lacks views/description/thumbnails metadata; neutral
-  # defaults keep the SearchVideo JSON shape the feed endpoints promise.
-  private def as_search_video(video : PlaylistVideo) : SearchVideo
+  # The playlist tables store no view counts, but the companion suggestion bot
+  # keeps a permanent metadata cache in the same database. That `suggest`
+  # schema belongs to the bot and is absent on a fresh install of this fork, so
+  # a failed lookup costs the view counts only, never the feed itself.
+  private def view_counts(ids : Array(String)) : Hash(String, Int64)
+    return {} of String => Int64 if ids.empty?
+
+    request = <<-SQL
+      SELECT vid, views FROM suggest.video_meta
+      WHERE views IS NOT NULL AND vid = ANY($1)
+    SQL
+
+    PG_DB.query_all(request, ids, as: {String, Int64}).to_h
+  rescue ex
+    LOGGER.debug("PlaylistFeeds: no view counts from suggest.video_meta (#{ex.message})")
+    {} of String => Int64
+  end
+
+  # PlaylistVideo lacks description/thumbnails metadata; neutral defaults keep
+  # the SearchVideo JSON shape the feed endpoints promise.
+  private def as_search_video(video : PlaylistVideo, views : Int64) : SearchVideo
     SearchVideo.new({
       title:              video.title,
       id:                 video.id,
       author:             video.author,
       ucid:               video.ucid,
       published:          video.published,
-      views:              0_i64,
+      views:              views,
       description_html:   "",
       length_seconds:     video.length_seconds,
       premiere_timestamp: nil,
