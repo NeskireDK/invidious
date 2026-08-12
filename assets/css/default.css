@@ -91,7 +91,7 @@ button.simulated_a  {
 }
 
 body a.channel-owner {
-  background-color: #008bec;
+  background-color: #cc0000;
   color: #fff;
   border-radius: 9px;
   padding: 1px 6px;
@@ -340,7 +340,7 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 .searchbar #searchbutton:hover {
-  color: rgb(0, 182, 240);
+  color: rgb(204, 0, 0);
 }
 
 .user-field {
@@ -541,7 +541,7 @@ span > select {
 .light-theme summary:focus,
 .light-theme .simulated_a:hover,
 .light-theme .simulated_a:active {
-  color: #075A9E !important;
+  color: #990000 !important;
 }
 
 .light-theme .pure-button-primary:hover,
@@ -549,8 +549,8 @@ span > select {
 .light-theme .pure-button-secondary:hover,
 .light-theme .pure-button-secondary:focus {
   color: #fff !important;
-  border-color: rgba(0, 182, 240, 0.75) !important;
-  background-color: rgba(0, 182, 240, 0.75) !important;
+  border-color: rgba(204, 0, 0, 0.75) !important;
+  background-color: rgba(204, 0, 0, 0.75) !important;
 }
 
 .light-theme .pure-button-secondary:not(.low-profile) {
@@ -586,7 +586,7 @@ span > select {
   .no-theme summary:focus,
   .no-theme .simulated_a:hover,
   .no-theme .simulated_a:active {
-    color: #075A9E !important;
+    color: #990000 !important;
   }
 
   .no-theme .pure-button-primary:hover,
@@ -594,8 +594,8 @@ span > select {
   .no-theme .pure-button-secondary:hover,
   .no-theme .pure-button-secondary:focus {
     color: #fff !important;
-    border-color: rgba(0, 182, 240, 0.75) !important;
-    background-color: rgba(0, 182, 240, 0.75) !important;
+    border-color: rgba(204, 0, 0, 0.75) !important;
+    background-color: rgba(204, 0, 0, 0.75) !important;
   }
 
   .no-theme .pure-button-secondary:not(.low-profile) {
@@ -644,7 +644,7 @@ span > select {
 .dark-theme summary:focus,
 .dark-theme .simulated_a:hover,
 .dark-theme .simulated_a:active {
-  color: rgb(0, 182, 240);
+  color: rgb(255, 82, 82);
 }
 
 .dark-theme .pure-button-primary:hover,
@@ -652,8 +652,8 @@ span > select {
 .dark-theme .pure-button-secondary:hover,
 .dark-theme .pure-button-secondary:focus {
   color: #fff !important;
-  border-color: rgb(0, 182, 240) !important;
-  background-color: rgba(0, 182, 240, 1) !important;
+  border-color: rgb(204, 0, 0) !important;
+  background-color: rgba(204, 0, 0, 1) !important;
 }
 
 .dark-theme .pure-button-secondary {
@@ -704,7 +704,7 @@ body.dark-theme {
   .no-theme a:focus,
   .no-theme .simulated_a:hover,
   .no-theme .simulated_a:active {
-    color: rgb(0, 182, 240);
+    color: rgb(255, 82, 82);
   }
 
   .no-theme .pure-button-primary:hover,
@@ -712,8 +712,8 @@ body.dark-theme {
   .no-theme .pure-button-secondary:hover,
   .no-theme .pure-button-secondary:focus {
     color: #fff !important;
-    border-color: rgb(0, 182, 240) !important;
-    background-color: rgba(0, 182, 240, 1) !important;
+    border-color: rgb(204, 0, 0) !important;
+    background-color: rgba(204, 0, 0, 1) !important;
   }
 
   .no-theme .pure-button-secondary {
