@@ -371,6 +371,27 @@ https_only: false
 #login_enabled: true
 
 ##
+## Trusted-header authentication (ArikTube extension).
+##
+## An authenticating reverse proxy (for example Authelia) asserts the
+## user name in a request header. The header is only honored when the
+## direct TCP peer is listed in trusted_proxies (literal IP addresses,
+## no CIDR ranges). Accounts are created on first sight. /api/ routes
+## are excluded — API clients keep using tokens.
+##
+## WARNING: the reverse proxy MUST strip this header from client
+## requests on every route that bypasses its authentication.
+##
+## Default: disabled
+##
+#trusted_header_auth:
+#  enabled: true
+#  header: Remote-User
+#  trusted_proxies:
+#    - 192.168.1.101
+#  logout_url: "https://auth.example.com/logout"
+
+##
 ## Enable/Disable the captcha challenge on the login page.
 ##
 ## Note: this is a basic captcha challenge that doesn't

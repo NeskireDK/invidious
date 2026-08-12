@@ -80,13 +80,21 @@ module Invidious::Routes::BeforeAll
                 "/companion/",
               }.any? { |r| env.request.resource.starts_with? r }
 
+    sid = nil
     if env.request.cookies.has_key? "SID"
       sid = env.request.cookies["SID"].value
 
       if sid.starts_with? "v1:"
         raise "Cannot use token as SID"
       end
+    end
 
+    # ArikTube: open or provision the session asserted by the reverse proxy
+    if asserted_email = Invidious::TrustedHeaderAuth.asserted_email(env)
+      sid = Invidious::TrustedHeaderAuth.ensure_session(env, sid, asserted_email)
+    end
+
+    if sid
       if email = Database::SessionIDs.select_email(sid)
         user = Database::Users.select!(email: email)
         csrf_token = generate_response(sid, {

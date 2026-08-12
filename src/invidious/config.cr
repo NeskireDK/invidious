@@ -80,6 +80,21 @@ struct HTTPProxyConfig
   property port : Int32
 end
 
+# Trusted-header authentication (ArikTube extension). An authenticating
+# reverse proxy (Authelia) asserts the user name in a request header.
+struct TrustedHeaderAuthConfig
+  include YAML::Serializable
+
+  property enabled : Bool = false
+  # Request header that carries the authenticated user name
+  property header : String = "Remote-User"
+  # Literal peer IPs allowed to assert the header. The TCP peer address is
+  # compared, never X-Forwarded-For. CIDR ranges are not supported.
+  property trusted_proxies : Array(String) = [] of String
+  # Optional target for the sign-out link while header auth is active
+  property logout_url : String? = nil
+end
+
 class Config
   include YAML::Serializable
 
@@ -135,6 +150,8 @@ class Config
   property captcha_enabled : Bool = true
   property login_enabled : Bool = true
   property registration_enabled : Bool = true
+  # Trusted-header authentication (ArikTube extension)
+  property trusted_header_auth : TrustedHeaderAuthConfig = TrustedHeaderAuthConfig.from_yaml("")
   property statistics_enabled : Bool = false
   property admins : Array(String) = [] of String
   property external_port : Int32? = nil
@@ -322,6 +339,24 @@ class Config
       else
         puts "Config: Either database_url or db.* is required"
         exit(1)
+      end
+    end
+
+    # Trusted-header auth (ArikTube extension): fail closed on misconfiguration
+    if config.trusted_header_auth.enabled
+      if config.trusted_header_auth.header.strip.empty?
+        puts "Config: trusted_header_auth.header can't be empty"
+        exit(1)
+      end
+      if config.trusted_header_auth.trusted_proxies.empty?
+        puts "Config: trusted_header_auth needs at least one trusted_proxies entry"
+        exit(1)
+      end
+      config.trusted_header_auth.trusted_proxies.each do |address|
+        if address.includes?('/') || !Socket::IPAddress.valid?(address)
+          puts "Config: trusted_header_auth.trusted_proxies takes literal IP addresses only (got '#{address}')"
+          exit(1)
+        end
       end
     end
 
