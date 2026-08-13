@@ -219,11 +219,20 @@ module Invidious::Routes::Account
     scopes ||= [] of String
 
     callback_url = env.params.query["callback_url"]?
+    expire = env.params.query["expire"]?.try &.to_i?
+
+    # ArikTube: a client the admin listed, reached through a session the
+    # trusted-header proxy vouches for, is answered as the consent POST
+    # below would answer it. The proxy already authenticated this person
+    # for this origin, so the extra click proves nothing.
+    if callback_url && Invidious::TrustedHeaderAuth.auto_approve_token?(env, user, callback_url)
+      access_token = generate_token(user.email, scopes, expire, HMAC_KEY)
+      return env.redirect self.token_callback_url(callback_url, user, access_token)
+    end
+
     if callback_url
       callback_url = URI.parse(callback_url)
     end
-
-    expire = env.params.query["expire"]?.try &.to_i?
 
     templated "user/authorize_token"
   end
@@ -257,25 +266,31 @@ module Invidious::Routes::Account
     access_token = generate_token(user.email, scopes, expire, HMAC_KEY)
 
     if callback_url
-      access_token = URI.encode_www_form(access_token)
-      url = URI.parse(callback_url)
-
-      if url.query
-        query = HTTP::Params.parse(url.query.not_nil!)
-      else
-        query = HTTP::Params.new
-      end
-
-      query["token"] = access_token
-      query["username"] = URI.encode_path_segment(user.email)
-      url.query = query.to_s
-
-      env.redirect url.to_s
+      env.redirect self.token_callback_url(callback_url, user, access_token)
     else
       csrf_token = ""
       env.set "access_token", access_token
       templated "user/authorize_token"
     end
+  end
+
+  # The client's callback URL with the granted token and the user name
+  # appended. Shared by the consent POST and the ArikTube auto-approval, so
+  # an approved client is handed exactly the same URL either way.
+  private def token_callback_url(callback_url : String, user : User, access_token : String) : String
+    url = URI.parse(callback_url)
+
+    if url.query
+      query = HTTP::Params.parse(url.query.not_nil!)
+    else
+      query = HTTP::Params.new
+    end
+
+    query["token"] = URI.encode_www_form(access_token)
+    query["username"] = URI.encode_path_segment(user.email)
+    url.query = query.to_s
+
+    url.to_s
   end
 
   # -------------------

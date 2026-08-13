@@ -45,6 +45,24 @@ module Invidious::TrustedHeaderAuth
     email
   end
 
+  # Whether a token authorization request may skip the consent page.
+  #
+  # Only for a session the proxy vouches for, and only when the callback
+  # lands on an origin the admin listed. The token still goes to that origin
+  # and nowhere else, so an attacker who talks the browser into this route
+  # hands the token to the admin's own client, not to themselves.
+  def auto_approve_token?(env, user, callback_url : String?) : Bool
+    config = CONFIG.trusted_header_auth
+
+    Invidious::ArikSettings.auto_approve_token?(
+      config.enabled,
+      config.auto_approve_token_callbacks,
+      asserted_email(env),
+      user.email,
+      callback_url
+    )
+  end
+
   # Whether `user` may change their password without typing the current one.
   #
   # The header has to assert this very user on this very request, so a
