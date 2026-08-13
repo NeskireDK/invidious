@@ -44,6 +44,10 @@ jobs:
 
   build:
     needs: test
+    # Only the arik branch publishes :latest — production pulls that tag through
+    # Watchtower. A dispatch on any other branch runs the test job alone, which
+    # is how a work branch gets type-checked without shipping itself.
+    if: github.ref == 'refs/heads/arik'
     runs-on: ubuntu-latest
     permissions:
       contents: read
