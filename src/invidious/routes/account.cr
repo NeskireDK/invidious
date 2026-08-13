@@ -23,7 +23,7 @@ module Invidious::Routes::Account
     sid = sid.as(String)
     csrf_token = generate_response(sid, {":change_password"}, HMAC_KEY)
 
-    sso_verified = Invidious::TrustedHeaderAuth.asserted_email(env) == user.email
+    sso_verified = Invidious::TrustedHeaderAuth.password_self_service?(env, user)
 
     templated "user/change_password"
   end
@@ -52,8 +52,9 @@ module Invidious::Routes::Account
 
     # An SSO session proves the identity through the trusted header already, so
     # the current password is waived. Accounts provisioned by SSO were given a
-    # random password the user never saw and could never type here.
-    sso_verified = Invidious::TrustedHeaderAuth.asserted_email(env) == user.email
+    # random password the user never saw and could never type here. The waiver
+    # is off when the admin turned password_self_service off.
+    sso_verified = Invidious::TrustedHeaderAuth.password_self_service?(env, user)
 
     password = env.params.body["password"]?
     if !sso_verified && (password.nil? || password.empty?)

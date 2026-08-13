@@ -45,6 +45,19 @@ module Invidious::TrustedHeaderAuth
     email
   end
 
+  # Whether `user` may change their password without typing the current one.
+  #
+  # The header has to assert this very user on this very request, so a
+  # password-login session never qualifies. The admin can switch the waiver
+  # off with trusted_header_auth.password_self_service.
+  def password_self_service?(env, user) : Bool
+    Invidious::ArikSettings.password_self_service?(
+      CONFIG.trusted_header_auth.password_self_service,
+      asserted_email(env),
+      user.email
+    )
+  end
+
   # Return a session id for `email`. Reuses `sid` when that session already
   # belongs to the user; otherwise provisions account + session and sets the
   # SID cookie, mirroring the manual login flow (routes/login.cr).
