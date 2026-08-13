@@ -145,6 +145,12 @@ LOGGER = Invidious::LogHandler.new(OUTPUT, CONFIG.log_level, CONFIG.colorize_log
 # Check table integrity
 Invidious::Database.check_integrity(CONFIG)
 
+# ArikTube: the environment config has seeded every value, now let the
+# database override the keys the admin edited in the web UI. Deliberately
+# after Config.load, so its fail-closed checks still run on the environment
+# config, and after the integrity check, so the table is there to read.
+Invidious::ArikSettings.apply_overrides!(CONFIG)
+
 {% if !flag?(:skip_videojs_download) %}
   # Resolve player dependencies. This is done at compile time.
   #

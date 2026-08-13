@@ -93,6 +93,14 @@ struct TrustedHeaderAuthConfig
   property trusted_proxies : Array(String) = [] of String
   # Optional target for the sign-out link while header auth is active
   property logout_url : String? = nil
+  # Let a session the proxy vouches for set a password without typing the
+  # current one. Accounts provisioned here were given a random password
+  # nobody ever saw, so this is what makes them usable from native clients.
+  property password_self_service : Bool = true
+  # Exact origins (scheme, host, optional port) whose token authorization
+  # requests skip the consent page. Only for sessions established by the
+  # trusted header; empty means every client sees the consent page.
+  property auto_approve_token_callbacks : Array(String) = [] of String
 end
 
 class Config
@@ -362,6 +370,15 @@ class Config
           puts "Config: trusted_header_auth.trusted_proxies takes literal IP addresses only (got '#{address}')"
           exit(1)
         end
+      end
+    end
+
+    # The auto-approval list waives a consent screen, so a typo in it is
+    # refused loudly instead of silently never matching.
+    config.trusted_header_auth.auto_approve_token_callbacks.each do |origin|
+      if error = Invidious::ArikSettings.origin_error(origin)
+        puts "Config: trusted_header_auth.auto_approve_token_callbacks: #{error}"
+        exit(1)
       end
     end
 

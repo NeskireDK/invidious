@@ -382,6 +382,17 @@ https_only: false
 ## WARNING: the reverse proxy MUST strip this header from client
 ## requests on every route that bypasses its authentication.
 ##
+## password_self_service lets such a session set a password without
+## typing the current one — those accounts were given a random password
+## nobody ever saw. Set it to false to require the current password.
+##
+## auto_approve_token_callbacks lists exact origins (scheme, host and
+## optional port, nothing else) whose token authorization requests skip
+## the consent page, so a client behind the same proxy signs in without
+## a click. Only sessions established by the trusted header qualify, and
+## the callback origin must match an entry whole. Empty = every client
+## sees the consent page.
+##
 ## Default: disabled
 ##
 #trusted_header_auth:
@@ -390,6 +401,9 @@ https_only: false
 #  trusted_proxies:
 #    - 192.168.1.101
 #  logout_url: "https://auth.example.com/logout"
+#  password_self_service: true
+#  auto_approve_token_callbacks:
+#    - "https://yt.example.com"
 
 ##
 ## Playlist-backed feeds (ArikTube extension).
@@ -408,6 +422,14 @@ https_only: false
 #  - IVPLxxxxxxxxxxxxxxxxxxxx
 #popular_playlists:
 #  - IVPLxxxxxxxxxxxxxxxxxxxx
+
+##
+## NOTE: the two settings above and trusted_header_auth can also be
+## edited at runtime, on the ArikTube settings page an administrator
+## reaches from /preferences. Those edits are stored in the database
+## (table arik_settings) and override what is written here, because a
+## config passed through INVIDIOUS_CONFIG can't be written back.
+##
 
 ##
 ## Enable/Disable the captcha challenge on the login page.
