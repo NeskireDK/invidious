@@ -1,0 +1,121 @@
+<% content_for "header" do %>
+<title><%= I18n.translate(locale, "ariktube_settings_title") %> - Invidious</title>
+<% end %>
+
+<div class="pure-g h-box">
+    <div class="pure-u-2-3">
+        <h3><%= I18n.translate(locale, "ariktube_settings_title") %></h3>
+    </div>
+    <div class="pure-u-1-3" style="text-align:right">
+        <h3>
+            <a href="/preferences?referer=<%= URI.encode_www_form(referer) %>"><%= I18n.translate(locale, "Preferences") %></a>
+        </h3>
+    </div>
+</div>
+
+<div class="h-box">
+    <p><%= I18n.translate(locale, "ariktube_settings_description") %></p>
+
+    <% if saved %>
+        <p><b><%= I18n.translate(locale, "ariktube_settings_saved") %></b></p>
+    <% end %>
+
+    <% if !errors.empty? %>
+        <p><b><%= I18n.translate(locale, "ariktube_settings_not_saved") %></b></p>
+        <ul>
+            <% errors.each do |error| %>
+                <li><%= HTML.escape(error) %></li>
+            <% end %>
+        </ul>
+    <% end %>
+
+    <% if !warnings.empty? %>
+        <p><b><%= I18n.translate(locale, "ariktube_settings_warnings") %></b></p>
+        <ul>
+            <% warnings.each do |warning| %>
+                <li><%= HTML.escape(warning) %></li>
+            <% end %>
+        </ul>
+    <% end %>
+</div>
+
+<div class="h-box">
+    <form class="pure-form pure-form-aligned" action="/admin/settings?referer=<%= URI.encode_www_form(referer) %>" method="post">
+        <% {"popular", "trending"}.each do |feed| %>
+            <% chosen = feed == "popular" ? popular : trending %>
+
+            <fieldset>
+                <legend><%= I18n.translate(locale, feed == "popular" ? "ariktube_popular_playlists_label" : "ariktube_trending_playlists_label") %></legend>
+                <p><%= I18n.translate(locale, "ariktube_playlists_help") %></p>
+
+                <% if playlists.empty? %>
+                    <p><%= I18n.translate(locale, "ariktube_no_public_playlists") %></p>
+                <% else %>
+                    <% playlists.each do |playlist| %>
+                        <div class="pure-control-group">
+                            <input name="<%= feed %>_playlist[]" id="<%= feed %>_playlist_<%= HTML.escape(playlist.id) %>"
+                                   type="checkbox" value="<%= HTML.escape(playlist.id) %>"
+                                   <% if chosen.includes?(playlist.id) %>checked<% end %>>
+                            <label for="<%= feed %>_playlist_<%= HTML.escape(playlist.id) %>">
+                                <%= HTML.escape(playlist.title) %> — <code><%= HTML.escape(playlist.id) %></code>
+                            </label>
+                            <input name="<%= feed %>_order[<%= HTML.escape(playlist.id) %>]" type="number" min="1" style="width:5em"
+                                   title="<%= I18n.translate(locale, "ariktube_playlist_order_label") %>"
+                                   value="<% if (position = chosen.index(playlist.id)) %><%= position + 1 %><% end %>">
+                        </div>
+                    <% end %>
+                <% end %>
+
+                <div class="pure-control-group">
+                    <label for="<%= feed %>_extra"><%= I18n.translate(locale, "ariktube_extra_playlists_label") %></label>
+                    <textarea class="pure-input-1" name="<%= feed %>_extra" id="<%= feed %>_extra" rows="3"><%= HTML.escape(chosen.reject { |plid| playlists.any? { |playlist| playlist.id == plid } }.join("\n")) %></textarea>
+                </div>
+            </fieldset>
+        <% end %>
+
+        <fieldset>
+            <legend><%= I18n.translate(locale, "ariktube_trusted_header_auth_label") %></legend>
+            <p><%= I18n.translate(locale, "ariktube_trusted_header_auth_help") %></p>
+
+            <div class="pure-control-group">
+                <label for="tha_enabled"><%= I18n.translate(locale, "ariktube_tha_enabled_label") %></label>
+                <input name="tha_enabled" id="tha_enabled" type="checkbox" <% if trusted_header_auth.enabled %>checked<% end %>>
+            </div>
+
+            <div class="pure-control-group">
+                <label for="tha_header"><%= I18n.translate(locale, "ariktube_tha_header_label") %></label>
+                <input name="tha_header" id="tha_header" type="text" value="<%= HTML.escape(trusted_header_auth.header) %>">
+            </div>
+
+            <div class="pure-control-group">
+                <label for="tha_trusted_proxies"><%= I18n.translate(locale, "ariktube_tha_trusted_proxies_label") %></label>
+                <textarea class="pure-input-1" name="tha_trusted_proxies" id="tha_trusted_proxies" rows="3"
+                          placeholder="192.168.1.101"><%= HTML.escape(trusted_header_auth.trusted_proxies.join("\n")) %></textarea>
+            </div>
+
+            <div class="pure-control-group">
+                <label for="tha_logout_url"><%= I18n.translate(locale, "ariktube_tha_logout_url_label") %></label>
+                <input class="pure-input-1" name="tha_logout_url" id="tha_logout_url" type="url" value="<%= HTML.escape(trusted_header_auth.logout_url) %>">
+            </div>
+
+            <div class="pure-control-group">
+                <label for="tha_password_self_service"><%= I18n.translate(locale, "ariktube_tha_password_self_service_label") %></label>
+                <input name="tha_password_self_service" id="tha_password_self_service" type="checkbox" <% if trusted_header_auth.password_self_service %>checked<% end %>>
+            </div>
+
+            <div class="pure-control-group">
+                <label for="tha_auto_approve"><%= I18n.translate(locale, "ariktube_tha_auto_approve_label") %></label>
+                <textarea class="pure-input-1" name="tha_auto_approve" id="tha_auto_approve" rows="3"
+                          placeholder="https://yt.example.com"><%= HTML.escape(trusted_header_auth.auto_approve_token_callbacks.join("\n")) %></textarea>
+            </div>
+
+            <p><%= I18n.translate(locale, "ariktube_tha_auto_approve_help") %></p>
+        </fieldset>
+
+        <button type="submit" class="pure-button pure-button-primary">
+            <%= I18n.translate(locale, "ariktube_settings_save") %>
+        </button>
+
+        <input type="hidden" name="csrf_token" value="<%= HTML.escape(csrf_token) %>">
+    </form>
+</div>

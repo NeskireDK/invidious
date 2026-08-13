@@ -136,6 +136,18 @@ module Invidious::Database::Playlists
     PG_DB.query_all(request, email, as: InvidiousPlaylist)
   end
 
+  # Every public playlist of this instance. Used by the ArikTube admin
+  # settings page, where the playlist-backed feeds are picked from a list.
+  def select_public : Array(InvidiousPlaylist)
+    request = <<-SQL
+      SELECT * FROM playlists
+      WHERE privacy = 'Public'
+      ORDER BY title
+    SQL
+
+    PG_DB.query_all(request, as: InvidiousPlaylist)
+  end
+
   def select_user_created_playlists(email : String) : Array({String, String})
     request = <<-SQL
       SELECT id,title FROM playlists
