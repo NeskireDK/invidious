@@ -206,40 +206,63 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   # serving every kind until it is recreated.
   private def reconcile_subscription_views : Nil
     wanted = CONFIG.feed_kinds.to_json
-    return if Invidious::ArikSettings.fetch(APPLIED_KEY) == wanted && !stale_views?
+    return if Invidious::ArikSettings.fetch(APPLIED_KEY) == wanted && views_current?
 
-    rebuild_subscription_views
-    Invidious::ArikSettings.store(APPLIED_KEY, wanted)
+    # Only on a clean sweep: a marker written after a failed rebuild would
+    # stop the job ever trying again.
+    Invidious::ArikSettings.store(APPLIED_KEY, wanted) if rebuild_subscription_views
   end
 
-  # A view predating the `kind` column cannot carry the predicate whatever the
-  # marker claims. This is what makes a restored backup heal itself.
-  private def stale_views? : Bool
+  # False when any user's view is missing or predates the `kind` column.
+  #
+  # pg_catalog, not information_schema: materialized views do not appear in
+  # information_schema at all, so a check there silently passes for ever.
+  # `left(..., 63)` mirrors the identifier truncation Postgres applies to
+  # these names, which are 77 characters long.
+  private def views_current? : Bool
     request = <<-SQL
-      SELECT count(*) FROM pg_matviews m
-      WHERE m.matviewname LIKE 'subscriptions\\_%'
-        AND NOT EXISTS (
-          SELECT 1 FROM information_schema.columns c
-          WHERE c.table_name = m.matviewname AND c.column_name = 'kind'
-        )
+      SELECT count(*) FROM users u
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pg_class c
+        JOIN pg_attribute a
+          ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+        WHERE c.relkind = 'm'
+          AND c.relname = left('subscriptions_' || encode(sha256(u.email::bytea), 'hex'), 63)
+          AND a.attname = 'kind'
+      )
     SQL
 
-    PG_DB.query_one(request, as: Int64) > 0
+    PG_DB.query_one(request, as: Int64) == 0
   end
 
-  private def rebuild_subscription_views : Nil
-    emails = PG_DB.query_all("SELECT email FROM users", as: String)
+  # Builds each view beside the live one and swaps it in, so a CREATE that
+  # fails leaves the user's feed alone. Dropping first cost both subscription
+  # feeds on 2026-08-30, when the column the new definition referenced did not
+  # exist yet.
+  private def rebuild_subscription_views : Bool
+    swept = true
 
-    emails.each do |email|
-      view_name = "subscriptions_#{sha256(email)}"
+    PG_DB.query_all("SELECT email FROM users", as: String).each do |email|
+      view = "subscriptions_#{sha256(email)}"
+      staging = "arik_staging_#{sha256(email)[0..31]}"
 
       begin
-        PG_DB.exec("DROP MATERIALIZED VIEW IF EXISTS #{view_name}")
-        PG_DB.exec("CREATE MATERIALIZED VIEW #{view_name} AS #{MATERIALIZED_VIEW_SQL.call(email)}")
-        LOGGER.info("ClassifyChannelVideosJob: rebuilt #{view_name} for kinds #{CONFIG.feed_kinds.join(",")}")
+        PG_DB.exec("DROP MATERIALIZED VIEW IF EXISTS #{staging}")
+        PG_DB.exec("CREATE MATERIALIZED VIEW #{staging} AS #{MATERIALIZED_VIEW_SQL.call(email)}")
+
+        PG_DB.transaction do |tx|
+          tx.connection.exec("DROP MATERIALIZED VIEW IF EXISTS #{view}")
+          tx.connection.exec("ALTER MATERIALIZED VIEW #{staging} RENAME TO #{view}")
+        end
+
+        LOGGER.info("ClassifyChannelVideosJob: rebuilt #{view} for kinds #{CONFIG.feed_kinds.join(",")}")
       rescue ex
-        LOGGER.error("ClassifyChannelVideosJob: cannot rebuild #{view_name} (#{ex.message})")
+        swept = false
+        LOGGER.error("ClassifyChannelVideosJob: cannot rebuild #{view} (#{ex.message})")
+        PG_DB.exec("DROP MATERIALIZED VIEW IF EXISTS #{staging}") rescue nil
       end
     end
+
+    swept
   end
 end
