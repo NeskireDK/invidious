@@ -105,9 +105,13 @@ module Invidious::Database::ChannelVideos
       last_items = "views = $10"
     end
 
+    # ArikTube: `kind` ($11) is written on insert and deliberately absent
+    # from the UPDATE set. A channel refresh re-inserts every row it reads, so
+    # including it would wipe the classifier's answer on every pass — this way
+    # upstream's upsert physically cannot overwrite a label.
     request = <<-SQL
       INSERT INTO channel_videos
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       ON CONFLICT (id) DO UPDATE
       SET title = $2, published = $3, updated = $4, ucid = $5,
           author = $6, length_seconds = $7, live_now = $8, #{last_items}

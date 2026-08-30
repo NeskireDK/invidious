@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.channel_videos
   live_now boolean,
   premiere_timestamp timestamp with time zone,
   views bigint,
+  kind text,
   CONSTRAINT channel_videos_id_key UNIQUE (id)
 );
 

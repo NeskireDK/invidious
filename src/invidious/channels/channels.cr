@@ -21,10 +21,16 @@ struct ChannelVideo
   property live_now : Bool = false
   property premiere_timestamp : Time? = nil
   property views : Int64? = nil
+  # ArikTube: content kind, nil until the classifier job has answered.
+  property kind : String? = nil
 
   def to_json(locale, json : JSON::Builder)
     json.object do
-      json.field "type", "shortVideo"
+      # ArikTube: upstream hardcodes "shortVideo" here for every row — legacy
+      # naming for "abbreviated video object", nothing to do with Shorts — so
+      # no client can tell a Short from a long-form upload. Report the real
+      # kind in the vocabulary clients already use for search results.
+      json.field "type", Invidious::ArikFeedKinds.json_type(self.kind)
 
       json.field "title", self.title
       json.field "videoId", self.id
@@ -239,6 +245,7 @@ def fetch_channel(ucid, pull_all_videos : Bool)
       live_now:           live_now,
       premiere_timestamp: premiere_timestamp,
       views:              views,
+      kind:               nil,
     })
 
     LOGGER.trace("fetch_channel: #{ucid} : video #{video_id} : Updating or inserting video")
@@ -274,6 +281,7 @@ def fetch_channel(ucid, pull_all_videos : Bool)
           live_now:           video.badges.live_now?,
           premiere_timestamp: video.premiere_timestamp,
           views:              video.views,
+          kind:               nil,
         })
 
         # We are notified of Red videos elsewhere (PubSub), which includes a correct published date,

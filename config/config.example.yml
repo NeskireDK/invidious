@@ -424,7 +424,27 @@ https_only: false
 #  - IVPLxxxxxxxxxxxxxxxxxxxx
 
 ##
-## NOTE: the two settings above and trusted_header_auth can also be
+## Subscription feed content kinds (ArikTube extension).
+##
+## Which kinds of upload the subscription feed shows. YouTube publishes a
+## per-channel uploads playlist per kind (UULF long-form, UUSH Shorts,
+## UULV live), so ClassifyChannelVideosJob labels each row from YouTube's
+## own classification rather than guessing from the length — a 27-second
+## clip and a 5-hour stream VOD both reach channel_videos with
+## length_seconds = 0.
+##
+## An entry the classifier has not reached yet is ALWAYS shown, and an
+## empty list admits everything. Neither a late job nor a bad value can
+## blank the feed.
+##
+## Accepted values: any of video, short, live
+## Default: ["video"]
+##
+#feed_kinds:
+#  - video
+
+##
+## NOTE: the settings above and trusted_header_auth can also be
 ## edited at runtime, on the ArikTube settings page an administrator
 ## reaches from /preferences. Those edits are stored in the database
 ## (table arik_settings) and override what is written here, because a
