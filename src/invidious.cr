@@ -194,8 +194,7 @@ Invidious::Jobs.register Invidious::Jobs::NotificationJob.new(NOTIFICATION_CHANN
 
 Invidious::Jobs.register Invidious::Jobs::ClearExpiredItemsJob.new
 
-# ArikTube: labels subscription feed rows with their content kind, and keeps
-# each user's subscription view in step with `feed_kinds`.
+# ArikTube: labels subscription feed rows with their content kind.
 Invidious::Jobs.register Invidious::Jobs::ClassifyChannelVideosJob.new(PG_DB)
 
 Invidious::Jobs.register Invidious::Jobs::InstanceListRefreshJob.new

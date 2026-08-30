@@ -4,13 +4,7 @@ require "../../src/invidious/arik_feed_kinds"
 Spectator.describe Invidious::ArikFeedKinds do
   alias Kinds = Invidious::ArikFeedKinds
 
-  # A real channel ID, so the prefix arithmetic is checked against something
-  # the measurements in the module comment were taken from.
   UCID = "UC7qUL2EsTHpNcgsz7woW9Iw"
-
-  # ------------------------------------------------------------------
-  #  Playlist / feed addressing
-  # ------------------------------------------------------------------
 
   describe ".uploads_playlist_id" do
     it "swaps the UC prefix for the kind's prefix" do
@@ -26,8 +20,6 @@ Spectator.describe Invidious::ArikFeedKinds do
     end
 
     it "refuses an ID that is not a channel ID" do
-      # Otherwise a malformed ID becomes a playlist ID that quietly returns
-      # somebody else's feed.
       expect(Kinds.uploads_playlist_id("PL7qUL2EsTHpNcgsz7woW9Iw", "short")).to be_nil
       expect(Kinds.uploads_playlist_id("UC", "short")).to be_nil
       expect(Kinds.uploads_playlist_id("UCtooshort", "short")).to be_nil
@@ -42,10 +34,6 @@ Spectator.describe Invidious::ArikFeedKinds do
 
   describe ".feed_resource" do
     it "addresses the playlist feed, not the channel feed" do
-      # The channel feed is what upstream's fetch_channel reads, and it takes
-      # the channel's name from the feed title. A playlist feed's title is
-      # "Videos" / "Short videos" / "Live streams", which is exactly why this
-      # module never goes near that code path.
       expect(Kinds.feed_resource(UCID, "short"))
         .to eq("/feeds/videos.xml?playlist_id=UUSH7qUL2EsTHpNcgsz7woW9Iw")
     end
@@ -65,17 +53,11 @@ Spectator.describe Invidious::ArikFeedKinds do
     end
 
     it "gives no answer for a status that carries none" do
-      # A row must stay unclassified rather than be guessed at, or a rate
-      # limit would silently label a channel's whole backlog long-form.
       expect(Kinds.kind_from_probe_status(429)).to be_nil
       expect(Kinds.kind_from_probe_status(500)).to be_nil
       expect(Kinds.kind_from_probe_status(404)).to be_nil
     end
   end
-
-  # ------------------------------------------------------------------
-  #  Visibility — the fail-open rule
-  # ------------------------------------------------------------------
 
   describe ".visible?" do
     it "hides a kind the feed does not admit" do
@@ -86,14 +68,10 @@ Spectator.describe Invidious::ArikFeedKinds do
     end
 
     it "shows an unclassified entry" do
-      # The classifier runs on a timer. A late or broken job must cost a few
-      # Shorts slipping through, never an empty subscription feed.
       expect(Kinds.visible?(nil, ["video"])).to be_true
     end
 
     it "shows an entry whose stored kind is not one we know" do
-      # Same reasoning: a bad value in the column is a data problem, not a
-      # reason to hide somebody's subscriptions.
       expect(Kinds.visible?("premiere", ["video"])).to be_true
     end
 
@@ -110,17 +88,10 @@ Spectator.describe Invidious::ArikFeedKinds do
     end
 
     it "calls an unclassified entry a video, not a Short" do
-      # Upstream hardcodes "shortVideo" for every feed row. Keeping that for
-      # unclassified entries would make a client filtering on the type hide
-      # long-form uploads the classifier simply has not reached.
       expect(Kinds.json_type(nil)).to eq("video")
       expect(Kinds.json_type("premiere")).to eq("video")
     end
   end
-
-  # ------------------------------------------------------------------
-  #  Settings validation
-  # ------------------------------------------------------------------
 
   describe ".clean_kinds" do
     it "accepts the known kinds and fixes their order" do
@@ -157,7 +128,6 @@ Spectator.describe Invidious::ArikFeedKinds do
     end
 
     it "refuses a malformed row instead of raising" do
-      # A bad row must never stop the instance from booting.
       kinds, error = Kinds.decode_kinds(%({"video": true}))
       expect(kinds).to be_nil
       expect(error).not_to be_nil
@@ -168,14 +138,8 @@ Spectator.describe Invidious::ArikFeedKinds do
     end
   end
 
-  # ------------------------------------------------------------------
-  #  Feed SQL
-  # ------------------------------------------------------------------
-
   describe ".view_predicate" do
     it "admits NULL alongside the configured kinds" do
-      # The fail-open rule has to hold inside the materialized view too, or a
-      # new upload is invisible until the classifier reaches it.
       predicate = Kinds.view_predicate(["video"], "cv.kind")
       expect(predicate).to contain("cv.kind IS NULL")
       expect(predicate).to contain("cv.kind IN ('video')")
@@ -188,15 +152,11 @@ Spectator.describe Invidious::ArikFeedKinds do
     end
 
     it "is empty when the feed admits everything" do
-      # No predicate at all, so an unfiltered view is byte-identical to
-      # upstream's and a rebuild is a no-op.
       expect(Kinds.view_predicate([] of String, "cv.kind")).to eq("")
       expect(Kinds.view_predicate(["video", "short", "live"], "cv.kind")).to eq("")
     end
 
     it "only ever emits the kinds it validated" do
-      # The predicate is interpolated into DDL, so nothing unvalidated may
-      # reach it. clean_kinds is the only way a value gets here.
       cleaned, _ = Kinds.clean_kinds(["video'; DROP TABLE users; --"])
       expect(cleaned).to be_empty
       expect(Kinds.view_predicate(cleaned, "cv.kind")).to eq("")

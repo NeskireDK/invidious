@@ -93,9 +93,7 @@ module Invidious::Routes::AdminSettings
         CONFIG.popular_playlists = popular
         CONFIG.trending_playlists = trending
         trusted_header_auth.apply_to(CONFIG.trusted_header_auth)
-        # ClassifyChannelVideosJob notices the change and rebuilds every
-        # subscription view on its next tick — the views bake the predicate
-        # in at CREATE time, so a REFRESH would not pick this up.
+        # ClassifyChannelVideosJob rebuilds the views on its next tick.
         CONFIG.feed_kinds = feed_kinds
 
         saved = true

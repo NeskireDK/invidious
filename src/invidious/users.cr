@@ -1,10 +1,9 @@
 require "crypto/bcrypt/password"
 
 # Materialized views may not be defined using bound parameters (`$1` as used elsewhere)
-# ArikTube: the trailing `ArikFeedKinds.view_predicate` restricts the feed to
-# the configured content kinds. It is baked in at CREATE time — `REFRESH`
-# re-runs the stored definition — so `ClassifyChannelVideosJob` rebuilds every
-# view when the setting changes.
+# ArikTube: the trailing `view_predicate` restricts the feed to the configured
+# content kinds. Baked in at CREATE time, so ClassifyChannelVideosJob rebuilds
+# every view when the setting changes.
 MATERIALIZED_VIEW_SQL = ->(email : String) { "SELECT cv.* FROM channel_videos cv WHERE EXISTS (SELECT subscriptions FROM users u WHERE cv.ucid = ANY (u.subscriptions) AND u.email = E'#{email.gsub({'\'' => "\\'", '\\' => "\\\\"})}')#{Invidious::ArikFeedKinds.view_predicate(CONFIG.feed_kinds, "cv.kind")} ORDER BY published DESC" }
 
 def create_user(sid, email, password)

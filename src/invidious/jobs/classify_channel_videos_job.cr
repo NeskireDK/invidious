@@ -1,61 +1,33 @@
 # Labels subscription feed rows with their content kind (ArikTube extension).
 #
-# Deliberately a separate job rather than an edit to `fetch_channel`.
-# `fetch_channel` is one of the functions upstream changes most, and the
-# `arik` branch is rebased onto release tags — code placed there would be a
-# conflict on every rebase. Upstream keeps inserting rows exactly as it does
-# now; this job corrects them afterwards. `Database::ChannelVideos.insert`
-# leaves `kind` out of its `ON CONFLICT DO UPDATE` set, so upstream's upsert
-# physically cannot overwrite a label once written.
+# A separate job rather than an edit to `fetch_channel`: this branch rebases
+# onto release tags, and that function is one upstream changes most. `kind` is
+# also absent from the insert's `ON CONFLICT DO UPDATE` set, so a channel
+# refresh cannot overwrite a label.
 #
-# Two passes, because one 15-entry feed window cannot answer for the whole
-# table:
-#
-#   1. **Window pass** — for each channel that still owes answers, read its
-#      Shorts and live-stream uploads feeds and label everything they carry.
-#      Anything else that channel owes and that is *newer* than the point
-#      both windows reached back to is long-form by elimination. Two requests
-#      per channel, and it covers every new upload for ever after.
-#
-#   2. **Tail pass** — rows older than the windows, capped per tick. Probes
-#      `/shorts/<id>`, where YouTube answers 200 for a Short and 303 for
-#      everything else. Authoritative, but it only answers short/not-short,
-#      so a stream VOD in the tail is labelled `video`. Accepted: the backlog
-#      is finite and drains once, and a past stream reads as a normal video
-#      in a feed anyway.
+# Two passes, because a 15-entry feed window cannot answer for the whole table:
+# the Shorts and live windows per channel, then a capped `/shorts/<id>` probe
+# for rows older than those windows. The probe only answers short/not-short, so
+# a stream VOD in the tail is labelled `video`.
 class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   private getter db : DB::Database
 
-  # How long a tick waits before the next one.
-  INTERVAL = 15.minutes
-
-  # Channels per tick. The window pass costs two requests each, and there is
-  # no hurry: the steady state is a handful of channels per tick.
+  INTERVAL          = 15.minutes
   CHANNELS_PER_TICK = 25
+  PROBES_PER_TICK   = 60
+  REQUEST_DELAY     = 500.milliseconds
 
-  # Probes per tick. 60 clears the ~530-row backlog of an established
-  # instance in about two hours of ticks without ever looking like a scrape.
-  PROBES_PER_TICK = 60
-
-  # Pause between requests to YouTube, matching the politeness of the rest of
-  # the instance's channel traffic.
-  REQUEST_DELAY = 500.milliseconds
-
-  # One feed window: the IDs it carried, and the publish date of its oldest
-  # entry. `oldest` is nil for a window that carried nothing, which is a
-  # valid answer — a channel that has never posted a Short has no Shorts
-  # playlist and YouTube says 404. A window that could not be *read* is a
-  # nil window, not an empty one.
+  # `oldest` nil means the window carried nothing, which is a valid answer —
+  # no uploads of that kind, so YouTube 404s the playlist. A window that could
+  # not be *read* is a nil window.
   alias Window = {ids: Array(String), oldest: Time?}
+
+  # Kinds the existing views were built for. In the database, not memory, so a
+  # restart does no DDL.
+  APPLIED_KEY = "feed_kinds_applied"
 
   def initialize(@db)
   end
-
-  # Marker row recording the kinds the existing views were built for. Kept in
-  # the database rather than in memory so a restart does no DDL: dropping and
-  # recreating every view on each boot would race the feed refresh job and any
-  # request reading a view at that moment, for no gain.
-  APPLIED_KEY = "feed_kinds_applied"
 
   def begin
     loop do
@@ -76,10 +48,6 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     end
   end
 
-  # ------------------------------------------------------------------
-  #  Pass 1 — the feed windows
-  # ------------------------------------------------------------------
-
   private def run_window_pass : Int32
     labelled = 0
 
@@ -88,7 +56,6 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
         shorts = feed_window(ucid, Invidious::ArikFeedKinds::KIND_SHORT)
         lives = feed_window(ucid, Invidious::ArikFeedKinds::KIND_LIVE)
 
-        # A window we could not read leaves the channel for the next tick.
         # Eliminating against a half-read pair would call a Short long-form.
         next if shorts.nil? || lives.nil?
 
@@ -106,8 +73,8 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     labelled += write_kind(lives[:ids], Invidious::ArikFeedKinds::KIND_LIVE)
 
     if shorts[:ids].empty? && lives[:ids].empty?
-      # This channel posts neither Shorts nor streams, so elimination holds
-      # for its whole history and the tail pass never has to see it.
+      # Neither kind exists for this channel, so elimination holds for its
+      # whole history and the tail pass never has to see it.
       request = <<-SQL
         UPDATE channel_videos SET kind = $1
         WHERE ucid = $2 AND kind IS NULL
@@ -118,9 +85,8 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
       ).rows_affected.to_i32
     end
 
-    # Otherwise elimination is only sound as far back as *both* windows saw:
-    # the more recent of the two floors. Past that a row's absence proves
-    # nothing — the window simply ended — so it is left to the tail pass.
+    # Elimination is sound only as far back as both windows saw. Past that a
+    # row's absence proves nothing, so it is left to the tail pass.
     horizon = [shorts[:oldest], lives[:oldest]].compact.max?
     return labelled if horizon.nil?
 
@@ -133,10 +99,6 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
       request, Invidious::ArikFeedKinds::KIND_VIDEO, ucid, horizon
     ).rows_affected.to_i32
   end
-
-  # ------------------------------------------------------------------
-  #  Pass 2 — the tail
-  # ------------------------------------------------------------------
 
   private def run_tail_pass : Int32
     labelled = 0
@@ -155,10 +117,6 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     labelled
   end
 
-  # ------------------------------------------------------------------
-  #  YouTube
-  # ------------------------------------------------------------------
-
   private def feed_window(ucid : String, kind : String) : Window?
     resource = Invidious::ArikFeedKinds.feed_resource(ucid, kind)
     return nil if resource.nil?
@@ -166,9 +124,6 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     sleep REQUEST_DELAY
     response = YT_POOL.client &.get(resource)
 
-    # No uploads of this kind means no playlist, and YouTube says 404. That
-    # is an answer, and an important one: it is what lets a channel that
-    # posts nothing but long-form be closed out in a single tick.
     return {ids: [] of String, oldest: nil} if response.status_code == 404
     return nil if response.status_code != 200
 
@@ -211,12 +166,6 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     nil
   end
 
-  # ------------------------------------------------------------------
-  #  Database
-  # ------------------------------------------------------------------
-
-  # Channels owing a label, the ones owing most first, so a channel that
-  # posts a lot of Shorts is dealt with soonest.
   private def pending_channels : Array(String)
     request = <<-SQL
       SELECT ucid FROM channel_videos
@@ -229,8 +178,6 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     PG_DB.query_all(request, CHANNELS_PER_TICK, as: String)
   end
 
-  # Rows the window pass has already had its chance at. Newest first —
-  # those are the ones a feed actually shows.
   private def pending_tail_videos : Array(String)
     request = <<-SQL
       SELECT id FROM channel_videos
@@ -242,8 +189,7 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     PG_DB.query_all(request, PROBES_PER_TICK, as: String)
   end
 
-  # Only ever writes over NULL. A label is never revised, so a later pass
-  # cannot undo an answer the authoritative probe already gave.
+  # Only ever writes over NULL, so a later pass cannot undo the probe's answer.
   private def write_kind(ids : Array(String), kind : String) : Int32
     return 0 if ids.empty?
 
@@ -255,13 +201,9 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     PG_DB.exec(request, kind, ids).rows_affected.to_i32
   end
 
-  # Rebuilds the subscription views when, and only when, they no longer match
-  # the configured kinds.
-  #
-  # The restriction is baked into a materialized view at CREATE time and
-  # `REFRESH` re-runs that stored definition, so a view made before this
-  # feature — or before the admin last changed the setting — keeps serving
-  # every kind until it is recreated.
+  # A materialized view bakes the predicate in at CREATE time and `REFRESH`
+  # re-runs that stored definition, so a view made before this feature keeps
+  # serving every kind until it is recreated.
   private def reconcile_subscription_views : Nil
     wanted = CONFIG.feed_kinds.to_json
     return if Invidious::ArikSettings.fetch(APPLIED_KEY) == wanted && !stale_views?
@@ -270,9 +212,8 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     Invidious::ArikSettings.store(APPLIED_KEY, wanted)
   end
 
-  # True when some view predates the `kind` column, so it cannot be carrying
-  # the predicate whatever the marker claims. This is what makes a restored
-  # backup heal itself instead of quietly serving Shorts for ever.
+  # A view predating the `kind` column cannot carry the predicate whatever the
+  # marker claims. This is what makes a restored backup heal itself.
   private def stale_views? : Bool
     request = <<-SQL
       SELECT count(*) FROM pg_matviews m
@@ -286,11 +227,6 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     PG_DB.query_one(request, as: Int64) > 0
   end
 
-  # DROP and CREATE every subscription view, so each one carries the
-  # predicate for the kinds currently configured.
-  #
-  # A user whose view cannot be rebuilt is logged and skipped rather than
-  # aborting the pass: one broken view must not cost everybody else theirs.
   private def rebuild_subscription_views : Nil
     emails = PG_DB.query_all("SELECT email FROM users", as: String)
 

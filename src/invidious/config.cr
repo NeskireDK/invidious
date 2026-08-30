@@ -160,11 +160,9 @@ class Config
   # duplicates dropped) instead of the stock feed content.
   property trending_playlists : Array(String) = [] of String
   property popular_playlists : Array(String) = [] of String
-  # Content kinds the subscription feed admits (ArikTube extension):
-  # "video" (long-form), "short", "live". An unclassified entry is always
-  # shown, and an empty list admits everything, so neither a late classifier
-  # job nor a bad value can blank the feed. Overridable from the admin
-  # settings page; see `Invidious::ArikFeedKinds`.
+  # Content kinds the subscription feed admits (ArikTube extension): "video",
+  # "short", "live". Unclassified entries are always shown and an empty list
+  # admits everything, so the feed cannot end up blank.
   property feed_kinds : Array(String) = ["video"]
   property captcha_enabled : Bool = true
   property login_enabled : Bool = true

@@ -26,10 +26,8 @@ struct ChannelVideo
 
   def to_json(locale, json : JSON::Builder)
     json.object do
-      # ArikTube: upstream hardcodes "shortVideo" here for every row — legacy
-      # naming for "abbreviated video object", nothing to do with Shorts — so
-      # no client can tell a Short from a long-form upload. Report the real
-      # kind in the vocabulary clients already use for search results.
+      # ArikTube: upstream hardcodes "shortVideo" for every row, which tells a
+      # client nothing. Report the real kind.
       json.field "type", Invidious::ArikFeedKinds.json_type(self.kind)
 
       json.field "title", self.title
