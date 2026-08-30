@@ -127,7 +127,7 @@ module Invidious::Routes::AdminSettings
     selected = env.params.body.fetch_all("#{prefix}_playlist[]")
 
     ordered = selected.map_with_index { |plid, index| {plid, index} }
-      .sort_by do |(plid, index)|
+      .sort_by! do |(plid, index)|
         position = env.params.body["#{prefix}_order[#{plid}]"]?.try &.to_i?
         {position || Int32::MAX, index}
       end

@@ -272,10 +272,10 @@ module Invidious::ArikSettings
       self.class.new(
         enabled: @enabled,
         header: @header.strip.presence || "Remote-User",
-        trusted_proxies: @trusted_proxies.map(&.strip).reject(&.empty?).uniq,
+        trusted_proxies: @trusted_proxies.map(&.strip).reject(&.empty?).uniq!,
         logout_url: @logout_url.strip,
         password_self_service: @password_self_service,
-        auto_approve_token_callbacks: @auto_approve_token_callbacks.map(&.strip).reject(&.empty?).uniq,
+        auto_approve_token_callbacks: @auto_approve_token_callbacks.map(&.strip).reject(&.empty?).uniq!,
       )
     end
 
