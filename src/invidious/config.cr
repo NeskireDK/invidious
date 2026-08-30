@@ -132,6 +132,11 @@ class Config
   # Subscribe to channels using PubSubHubbub (requires domain, hmac_key)
   property use_pubsub_feeds : Bool | Int32 = false
   property popular_enabled : Bool = true
+  # Content kinds the subscription feed admits: "video" (long-form), "short",
+  # "live". An entry the classifier has not reached yet is always shown and an
+  # empty list admits everything, so the feed cannot end up blank.
+  # See Invidious::FeedKinds and Jobs::ClassifyChannelVideosJob.
+  property feed_kinds : Array(String) = ["video"]
   property captcha_enabled : Bool = true
   property login_enabled : Bool = true
   property registration_enabled : Bool = true

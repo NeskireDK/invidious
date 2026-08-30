@@ -371,6 +371,26 @@ https_only: false
 #login_enabled: true
 
 ##
+## Subscription feed content kinds.
+##
+## Which kinds of upload the subscription feed shows. YouTube publishes a
+## per-channel uploads playlist per kind (UULF long-form, UUSH Shorts,
+## UULV live), so ClassifyChannelVideosJob labels each row from YouTube's
+## own classification rather than guessing from the length: a 27-second
+## clip and a 5-hour stream VOD both reach channel_videos with
+## length_seconds = 0.
+##
+## An entry the classifier has not reached yet is ALWAYS shown, and an
+## empty list admits everything, so neither a late job nor a bad value
+## can blank the feed.
+##
+## Accepted values: any of video, short, live
+## Default: ["video"]
+##
+#feed_kinds:
+#  - video
+
+##
 ## Enable/Disable the captcha challenge on the login page.
 ##
 ## Note: this is a basic captcha challenge that doesn't

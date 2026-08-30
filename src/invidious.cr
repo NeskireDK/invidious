@@ -188,6 +188,9 @@ Invidious::Jobs.register Invidious::Jobs::NotificationJob.new(NOTIFICATION_CHANN
 
 Invidious::Jobs.register Invidious::Jobs::ClearExpiredItemsJob.new
 
+# Labels subscription feed rows with their content kind.
+Invidious::Jobs.register Invidious::Jobs::ClassifyChannelVideosJob.new(PG_DB)
+
 Invidious::Jobs.register Invidious::Jobs::InstanceListRefreshJob.new
 
 Invidious::Jobs.start_all
