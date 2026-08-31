@@ -17,6 +17,7 @@ private class FakeConfig
   property popular_playlists : Array(String) = [] of String
   property trending_playlists : Array(String) = [] of String
   property trusted_header_auth : FakeTrustedHeaderAuthConfig = FakeTrustedHeaderAuthConfig.new
+  property feed_kinds : Array(String) = ["video"]
 end
 
 Spectator.describe Invidious::ArikSettings do

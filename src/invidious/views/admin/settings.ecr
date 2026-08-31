@@ -74,6 +74,19 @@
         <% end %>
 
         <fieldset>
+            <legend><%= I18n.translate(locale, "ariktube_feed_kinds_label") %></legend>
+            <p><%= I18n.translate(locale, "ariktube_feed_kinds_help") %></p>
+
+            <% Invidious::ArikFeedKinds::KINDS.each do |kind| %>
+                <div class="pure-control-group">
+                    <input name="feed_kind[]" id="feed_kind_<%= kind %>" type="checkbox" value="<%= kind %>"
+                           <% if feed_kinds.includes?(kind) %>checked<% end %>>
+                    <label for="feed_kind_<%= kind %>"><%= I18n.translate(locale, "ariktube_feed_kind_#{kind}") %></label>
+                </div>
+            <% end %>
+        </fieldset>
+
+        <fieldset>
             <legend><%= I18n.translate(locale, "ariktube_trusted_header_auth_label") %></legend>
             <p><%= I18n.translate(locale, "ariktube_trusted_header_auth_help") %></p>
 

@@ -25,6 +25,7 @@ module Invidious::ArikSettings
   KEY_POPULAR_PLAYLISTS   = "popular_playlists"
   KEY_TRENDING_PLAYLISTS  = "trending_playlists"
   KEY_TRUSTED_HEADER_AUTH = "trusted_header_auth"
+  KEY_FEED_KINDS          = "feed_kinds"
 
   # Playlist IDs are opaque strings; this accepts both the local "IVPL…" and
   # the YouTube "PL…" shapes while rejecting anything with separators in it.
@@ -271,10 +272,10 @@ module Invidious::ArikSettings
       self.class.new(
         enabled: @enabled,
         header: @header.strip.presence || "Remote-User",
-        trusted_proxies: @trusted_proxies.map(&.strip).reject(&.empty?).uniq,
+        trusted_proxies: @trusted_proxies.map(&.strip).reject(&.empty?).uniq!,
         logout_url: @logout_url.strip,
         password_self_service: @password_self_service,
-        auto_approve_token_callbacks: @auto_approve_token_callbacks.map(&.strip).reject(&.empty?).uniq,
+        auto_approve_token_callbacks: @auto_approve_token_callbacks.map(&.strip).reject(&.empty?).uniq!,
       )
     end
 
@@ -331,10 +332,12 @@ module Invidious::ArikSettings
     popular_playlists : Array(String)?,
     trending_playlists : Array(String)?,
     trusted_header_auth : TrustedHeaderAuthSettings?,
+    feed_kinds : Array(String)? = nil,
   ) : Nil
     config.popular_playlists = popular_playlists if popular_playlists
     config.trending_playlists = trending_playlists if trending_playlists
     trusted_header_auth.try &.apply_to(config.trusted_header_auth)
+    config.feed_kinds = feed_kinds if feed_kinds
   end
 
   # ------------------------------------------------------------------
@@ -369,6 +372,7 @@ module Invidious::ArikSettings
     popular, popular_error = decode_playlists(fetch(KEY_POPULAR_PLAYLISTS))
     trending, trending_error = decode_playlists(fetch(KEY_TRENDING_PLAYLISTS))
     trusted_header_auth, tha_error = decode_trusted_header_auth(fetch(KEY_TRUSTED_HEADER_AUTH))
+    feed_kinds, feed_kinds_error = ArikFeedKinds.decode_kinds(fetch(KEY_FEED_KINDS))
 
     if error = popular_error
       LOGGER.error("ArikSettings: ignoring stored '#{KEY_POPULAR_PLAYLISTS}' — #{error}")
@@ -379,7 +383,10 @@ module Invidious::ArikSettings
     if error = tha_error
       LOGGER.error("ArikSettings: ignoring stored '#{KEY_TRUSTED_HEADER_AUTH}' — #{error}")
     end
+    if error = feed_kinds_error
+      LOGGER.error("ArikSettings: ignoring stored '#{KEY_FEED_KINDS}' — #{error}")
+    end
 
-    merge_overrides!(config, popular, trending, trusted_header_auth)
+    merge_overrides!(config, popular, trending, trusted_header_auth, feed_kinds)
   end
 end

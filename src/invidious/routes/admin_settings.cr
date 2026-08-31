@@ -32,6 +32,7 @@ module Invidious::Routes::AdminSettings
     popular = CONFIG.popular_playlists
     trending = CONFIG.trending_playlists
     trusted_header_auth = ArikSettings::TrustedHeaderAuthSettings.from_config(CONFIG.trusted_header_auth)
+    feed_kinds = CONFIG.feed_kinds
 
     saved = false
     errors = [] of String
@@ -77,6 +78,9 @@ module Invidious::Routes::AdminSettings
     trusted_header_auth = self.submitted_trusted_header_auth(env).cleaned
     errors.concat(trusted_header_auth.errors)
 
+    feed_kinds, feed_kind_errors = ArikFeedKinds.clean_kinds(env.params.body.fetch_all("feed_kind[]"))
+    errors.concat(feed_kind_errors.map { |error| "Subscription feed content: #{error}" })
+
     # Nothing is stored while anything is wrong: a half-applied trusted-header
     # block is exactly the state this page exists to prevent.
     if errors.empty?
@@ -84,10 +88,13 @@ module Invidious::Routes::AdminSettings
         ArikSettings.store(ArikSettings::KEY_POPULAR_PLAYLISTS, popular.to_json)
         ArikSettings.store(ArikSettings::KEY_TRENDING_PLAYLISTS, trending.to_json)
         ArikSettings.store(ArikSettings::KEY_TRUSTED_HEADER_AUTH, trusted_header_auth.to_json)
+        ArikSettings.store(ArikSettings::KEY_FEED_KINDS, feed_kinds.to_json)
 
         CONFIG.popular_playlists = popular
         CONFIG.trending_playlists = trending
         trusted_header_auth.apply_to(CONFIG.trusted_header_auth)
+        # ClassifyChannelVideosJob rebuilds the views on its next tick.
+        CONFIG.feed_kinds = feed_kinds
 
         saved = true
         LOGGER.info("AdminSettings: #{user.email} updated the ArikTube settings")
@@ -118,7 +125,7 @@ module Invidious::Routes::AdminSettings
     selected = env.params.body.fetch_all("#{prefix}_playlist[]")
 
     ordered = selected.map_with_index { |plid, index| {plid, index} }
-      .sort_by do |(plid, index)|
+      .sort_by! do |(plid, index)|
         position = env.params.body["#{prefix}_order[#{plid}]"]?.try &.to_i?
         {position || Int32::MAX, index}
       end
