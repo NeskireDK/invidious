@@ -489,7 +489,7 @@
     "ariktube_playlists_help": "Tick the playlists this feed serves and number them to set their order. Leave everything unticked to serve the stock feed.",
     "ariktube_playlist_order_label": "Position",
     "ariktube_extra_playlists_label": "Other playlist IDs, one per line",
-    "ariktube_no_public_playlists": "This instance has no public playlists yet.",
+    "ariktube_no_feedable_playlists": "This instance has no playlists a feed can serve yet.",
     "ariktube_trusted_header_auth_label": "Trusted-header authentication",
     "ariktube_trusted_header_auth_help": "The reverse proxy asserts the user name in a request header. The header is honored only when the direct peer is one of the trusted proxies below, which must be literal IP addresses — an address range stops the instance from starting.",
     "ariktube_tha_enabled_label": "Trusted-header authentication enabled: ",

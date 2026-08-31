@@ -2,7 +2,9 @@
 #
 # On a personal instance "Trending" and "Popular" mean "what this server's
 # owner pushes". When `trending_playlists` / `popular_playlists` name local
-# public playlists, those feeds serve the merged playlist content instead.
+# playlists, those feeds serve the merged playlist content instead. Public or
+# unlisted both qualify: naming the plid in the config is the operator's
+# decision to publish it, and unlisted already means "readable with the id".
 # The swap happens at the data layer (fetch_trending / popular_videos), so
 # the HTML views and /api/v1/trending|popular emit the same items and every
 # API client shows them without client-side support.
@@ -10,8 +12,8 @@ module Invidious::PlaylistFeeds
   extend self
 
   # Merged videos of the configured playlists: config order, each playlist
-  # in its own order, duplicates dropped. Missing or non-public playlists
-  # are skipped with a log line so one bad entry cannot break the feed.
+  # in its own order, duplicates dropped. Missing or private playlists are
+  # skipped with a log line so one bad entry cannot break the feed.
   def feed_videos(plids : Array(String)) : Array(SearchVideo)
     playlist_videos = [] of PlaylistVideo
     seen = Set(String).new
@@ -22,8 +24,8 @@ module Invidious::PlaylistFeeds
         LOGGER.warn("PlaylistFeeds: playlist #{plid} does not exist, skipping")
         next
       end
-      if playlist.privacy != PlaylistPrivacy::Public
-        LOGGER.warn("PlaylistFeeds: playlist #{plid} is not public, skipping")
+      unless playlist.privacy.feedable?
+        LOGGER.warn("PlaylistFeeds: playlist #{plid} is private, skipping")
         next
       end
 

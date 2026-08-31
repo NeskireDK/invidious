@@ -162,6 +162,18 @@ enum PlaylistPrivacy
   Public   = 0
   Unlisted = 1
   Private  = 2
+
+  # May a playlist at this privacy back a Trending/Popular feed? (ArikTube.)
+  #
+  # Private cannot: nobody may read it. Unlisted can, and deliberately —
+  # unlisted already means "readable by anyone holding the id", and naming a
+  # plid in the server config is the operator deciding to publish it. Demanding
+  # Public here made a routine "set the lanes to unlisted" sweep empty the front
+  # page, with one log line to explain it. The rule lives on the enum so the
+  # feed and the admin page cannot drift apart on the answer.
+  def feedable?
+    self != PlaylistPrivacy::Private
+  end
 end
 
 struct InvidiousPlaylist

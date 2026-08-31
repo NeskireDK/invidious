@@ -49,7 +49,7 @@
                 <p><%= I18n.translate(locale, "ariktube_playlists_help") %></p>
 
                 <% if playlists.empty? %>
-                    <p><%= I18n.translate(locale, "ariktube_no_public_playlists") %></p>
+                    <p><%= I18n.translate(locale, "ariktube_no_feedable_playlists") %></p>
                 <% else %>
                     <% playlists.each do |playlist| %>
                         <div class="pure-control-group">
