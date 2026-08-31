@@ -152,10 +152,10 @@ module Invidious::Routes::AdminSettings
   #  Playlist lookups
   # ------------------------------------------------------------------
 
-  # The public playlists of this instance, for the tick-box lists. A database
-  # that can't answer costs the lists, not the page.
+  # The playlists a feed may serve, for the tick-box lists. A database that
+  # can't answer costs the lists, not the page.
   private def public_playlists : Array(InvidiousPlaylist)
-    Invidious::Database::Playlists.select_public
+    Invidious::Database::Playlists.select_feedable
   rescue ex
     LOGGER.error("AdminSettings: cannot list public playlists (#{ex.message})")
     [] of InvidiousPlaylist
@@ -168,8 +168,8 @@ module Invidious::Routes::AdminSettings
 
       if playlist.nil?
         "Playlist #{plid} does not exist on this instance and will be skipped"
-      elsif playlist.privacy != PlaylistPrivacy::Public
-        "Playlist #{plid} is not public and will be skipped"
+      elsif !playlist.privacy.feedable?
+        "Playlist #{plid} is private and will be skipped"
       end
     end
   rescue ex

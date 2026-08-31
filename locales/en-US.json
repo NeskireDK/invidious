@@ -489,7 +489,7 @@
     "ariktube_playlists_help": "Tick the playlists this feed serves and number them to set their order. Leave everything unticked to serve the stock feed.",
     "ariktube_playlist_order_label": "Position",
     "ariktube_extra_playlists_label": "Other playlist IDs, one per line",
-    "ariktube_no_public_playlists": "This instance has no public playlists yet.",
+    "ariktube_no_feedable_playlists": "This instance has no playlists a feed can serve yet.",
     "ariktube_feed_kinds_label": "Subscription feed content",
     "ariktube_feed_kinds_help": "Which kinds of upload the subscription feed shows. An entry the classifier has not reached yet is always shown, and ticking nothing shows everything, so the feed can never end up blank. Changing this rebuilds every subscription feed within 15 minutes.",
     "ariktube_feed_kind_video": "Long-form videos",
