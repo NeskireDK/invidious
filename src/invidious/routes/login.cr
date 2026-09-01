@@ -178,6 +178,12 @@ module Invidious::Routes::Login
       env.response.cookies << cookie
     end
 
+    # ArikTube: end the proxy's session too, or the next request re-asserts the
+    # identity and ensure_session mints a replacement immediately.
+    if CONFIG.trusted_header_auth.enabled && (logout_url = CONFIG.trusted_header_auth.logout_url)
+      return env.redirect logout_url
+    end
+
     env.redirect referer
   end
 end
