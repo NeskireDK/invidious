@@ -7,8 +7,9 @@
 #
 # Two passes, because a 15-entry feed window cannot answer for the whole table:
 # the Shorts and live windows per channel, then a capped `/shorts/<id>` probe
-# for rows older than those windows. The probe only answers short/not-short, so
-# a stream VOD in the tail is labelled `video`.
+# for every row the windows cannot settle — both the ones older than the window
+# and the ones too fresh to eliminate (see SHORTS_FEED_LAG). The probe only
+# answers short/not-short, so a stream VOD in the tail is labelled `video`.
 class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   private getter db : DB::Database
 
@@ -16,6 +17,14 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   CHANNELS_PER_TICK = 25
   PROBES_PER_TICK   = 60
   REQUEST_DELAY     = 500.milliseconds
+
+  # YouTube publishes an upload to the UUSH Shorts playlist feed later than a
+  # channel refresh sees it, so a fresh row's absence from the Shorts window is
+  # not evidence it is long-form. Measured on 2026-09-01: three Shorts were
+  # labelled `video` within minutes of publication and were listed in the
+  # Shorts feed hours later. Elimination waits this long; the probe answers
+  # sooner and correctly.
+  SHORTS_FEED_LAG = 24.hours
 
   # `oldest` nil means the window carried nothing, which is a valid answer —
   # no uploads of that kind, so YouTube 404s the playlist. A window that could
@@ -59,7 +68,9 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
         # Eliminating against a half-read pair would call a Short long-form.
         next if shorts.nil? || lives.nil?
 
-        labelled += apply_window(ucid, shorts, lives)
+        changed = apply_window(ucid, shorts, lives)
+        mark_feeds_stale([ucid]) if changed > 0
+        labelled += changed
       rescue ex
         LOGGER.error("ClassifyChannelVideosJob: #{ucid} : #{ex.message}")
       end
@@ -72,16 +83,18 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     labelled = write_kind(shorts[:ids], Invidious::ArikFeedKinds::KIND_SHORT)
     labelled += write_kind(lives[:ids], Invidious::ArikFeedKinds::KIND_LIVE)
 
+    settled = Time.utc - SHORTS_FEED_LAG
+
     if shorts[:ids].empty? && lives[:ids].empty?
       # Neither kind exists for this channel, so elimination holds for its
       # whole history and the tail pass never has to see it.
       request = <<-SQL
         UPDATE channel_videos SET kind = $1
-        WHERE ucid = $2 AND kind IS NULL
+        WHERE ucid = $2 AND kind IS NULL AND published < $3
       SQL
 
       return labelled + PG_DB.exec(
-        request, Invidious::ArikFeedKinds::KIND_VIDEO, ucid
+        request, Invidious::ArikFeedKinds::KIND_VIDEO, ucid, settled
       ).rows_affected.to_i32
     end
 
@@ -92,28 +105,59 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
 
     request = <<-SQL
       UPDATE channel_videos SET kind = $1
-      WHERE ucid = $2 AND kind IS NULL AND published >= $3
+      WHERE ucid = $2 AND kind IS NULL AND published >= $3 AND published < $4
     SQL
 
     labelled + PG_DB.exec(
-      request, Invidious::ArikFeedKinds::KIND_VIDEO, ucid, horizon
+      request, Invidious::ArikFeedKinds::KIND_VIDEO, ucid, horizon, settled
     ).rows_affected.to_i32
+  end
+
+  # A materialized view holds whatever `kind` said when it was last refreshed,
+  # and RefreshFeedsJob only rebuilds a view whose owner is flagged. Without
+  # this a corrected label never reaches the feed: the row keeps its old kind on
+  # screen until an unrelated upload happens to flag that user.
+  private def mark_feeds_stale(ucids : Array(String)) : Nil
+    return if ucids.empty?
+
+    request = <<-SQL
+      UPDATE users SET feed_needs_update = true
+      WHERE subscriptions && $1
+    SQL
+
+    PG_DB.exec(request, ucids)
+  end
+
+  private def channels_of(ids : Array(String)) : Array(String)
+    return [] of String if ids.empty?
+
+    request = <<-SQL
+      SELECT DISTINCT ucid FROM channel_videos
+      WHERE id = ANY($1) AND ucid IS NOT NULL
+    SQL
+
+    PG_DB.query_all(request, ids, as: String)
   end
 
   private def run_tail_pass : Int32
     labelled = 0
+    written = [] of String
 
     pending_tail_videos.each do |id|
       begin
         kind = probe_kind(id)
         next if kind.nil?
 
-        labelled += write_kind([id], kind)
+        if write_kind([id], kind) > 0
+          labelled += 1
+          written << id
+        end
       rescue ex
         LOGGER.error("ClassifyChannelVideosJob: probe #{id} : #{ex.message}")
       end
     end
 
+    mark_feeds_stale(channels_of(written))
     labelled
   end
 
