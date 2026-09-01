@@ -101,7 +101,7 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
 
   private def apply_window(ucid : String, shorts : Window, lives : Window) : Int32
     labelled = correct_kind(shorts[:ids], Invidious::ArikFeedKinds::KIND_SHORT)
-    labelled += correct_kind(lives[:ids], Invidious::ArikFeedKinds::KIND_LIVE)
+    labelled += correct_kind(lives[:ids] - shorts[:ids], Invidious::ArikFeedKinds::KIND_LIVE)
 
     settled = Time.utc - SHORTS_FEED_LAG
 
@@ -187,10 +187,13 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   end
 
   # Whether the UULV window has had long enough to claim this row, so that
-  # "not a Short" can be read as long-form. A row with no date at all can
-  # never clear this, and is left to the windows.
+  # "not a Short" can be read as long-form. A row with no date is not waiting
+  # on a window and never will be, so it is settled rather than held back --
+  # holding it back would leave it unlabelled for ever and, because
+  # `pending_channels` ranks by how many NULL rows a channel has, would pin its
+  # channel and starve the rest.
   private def long_form_settled?(published : Time?) : Bool
-    return false if published.nil?
+    return true if published.nil?
 
     published < Time.utc - LIVE_FEED_LAG
   end
@@ -262,11 +265,12 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     request = <<-SQL
       SELECT id, published FROM channel_videos
       WHERE kind IS NULL AND ucid = ANY($1)
-      ORDER BY published DESC
+      ORDER BY (published IS NULL OR published < $3) DESC, published DESC NULLS FIRST
       LIMIT $2
     SQL
 
-    PG_DB.query_all(request, ucids, PROBES_PER_TICK, as: {id: String, published: Time?})
+    PG_DB.query_all(request, ucids, PROBES_PER_TICK, Time.utc - LIVE_FEED_LAG,
+      as: {id: String, published: Time?})
   end
 
   # An inference, so it only ever writes over NULL: a probe that guessed must
