@@ -249,12 +249,14 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   # re-runs that stored definition, so a view made before this feature keeps
   # serving every kind until it is recreated.
   private def reconcile_subscription_views : Nil
-    wanted = CONFIG.feed_kinds.to_json
-    return if Invidious::ArikSettings.fetch(APPLIED_KEY) == wanted && views_current?
+    applied, _ = Invidious::ArikFeedKinds.decode_kinds(
+      Invidious::ArikSettings.fetch(APPLIED_KEY))
+    wanted, _ = Invidious::ArikFeedKinds.clean_kinds(CONFIG.feed_kinds)
+    return if applied == wanted && views_current?
 
     # Only on a clean sweep: a marker written after a failed rebuild would
     # stop the job ever trying again.
-    Invidious::ArikSettings.store(APPLIED_KEY, wanted) if rebuild_subscription_views
+    Invidious::ArikSettings.store(APPLIED_KEY, wanted.to_json) if rebuild_subscription_views
   end
 
   # False when any user's view is missing or predates the `kind` column.
@@ -262,7 +264,7 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   # pg_catalog, not information_schema: materialized views do not appear in
   # information_schema at all, so a check there silently passes for ever.
   # `left(..., 63)` mirrors the identifier truncation Postgres applies to
-  # these names, which are 77 characters long.
+  # these names: "subscriptions_" plus 64 hex characters is 78.
   private def views_current? : Bool
     request = <<-SQL
       SELECT count(*) FROM users u
