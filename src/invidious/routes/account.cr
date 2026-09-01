@@ -222,11 +222,21 @@ module Invidious::Routes::Account
     expire = env.params.query["expire"]?.try &.to_i?
 
     # ArikTube: a client the admin listed, reached through a session the
-    # trusted-header proxy vouches for, is answered as the consent POST
-    # below would answer it. The proxy already authenticated this person
-    # for this origin, so the extra click proves nothing.
+    # trusted-header proxy vouches for, is answered without the consent page.
+    # The proxy already authenticated this person for this origin, so the extra
+    # click proves nothing — but nothing was clicked, so the grant is clamped
+    # to what an allowlisted client needs and is logged as the audit line the
+    # missing consent screen would have been.
     if callback_url && Invidious::TrustedHeaderAuth.auto_approve_token?(env, user, callback_url)
-      access_token = generate_token(user.email, scopes, expire, HMAC_KEY)
+      granted_scopes = Invidious::ArikSettings.clamp_auto_approved_scopes(scopes)
+      granted_expire = Invidious::ArikSettings.clamp_auto_approved_expire(expire)
+      access_token = generate_token(user.email, granted_scopes, granted_expire, HMAC_KEY)
+
+      origin = Invidious::ArikSettings.normalize_origin(callback_url)
+      LOGGER.info("authorize_token: auto-approved #{user.email} for #{origin}, \
+                   scopes [#{granted_scopes.join(" ")}], \
+                   expires #{Time.unix(granted_expire).to_rfc3339}")
+
       return env.redirect self.token_callback_url(callback_url, user, access_token)
     end
 
