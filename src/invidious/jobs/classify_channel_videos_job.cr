@@ -12,8 +12,9 @@
 # Two passes, because a 15-entry feed window cannot answer for the whole table:
 # the Shorts and live windows per channel, then a capped `/shorts/<id>` probe
 # for every row the windows cannot settle — both the ones older than the window
-# and the ones too fresh to eliminate (see SHORTS_FEED_LAG). The probe only
-# answers short/not-short, so a stream VOD in the tail is labelled `video`.
+# and the ones too fresh to eliminate (see SHORTS_FEED_LAG). The probe answers
+# short/not-short only, so a stream VOD looks exactly like a long-form upload
+# to it and the tail pass has to leave `live` to the windows.
 class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   private getter db : DB::Database
 
@@ -30,10 +31,20 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   # sooner and correctly.
   SHORTS_FEED_LAG = 24.hours
 
+  # Nothing probes for `live`: a stream VOD and a long-form upload are the same
+  # redirect. So the tail pass's long-form answer waits for the UULV window to
+  # have had a chance to claim the row, on the assumption — unmeasured, unlike
+  # SHORTS_FEED_LAG — that the UULV feed lags publication like the UUSH one.
+  LIVE_FEED_LAG = SHORTS_FEED_LAG
+
   # `oldest` nil means the window carried nothing, which is a valid answer —
   # no uploads of that kind, so YouTube 404s the playlist. A window that could
   # not be *read* is a nil window.
   alias Window = {ids: Array(String), oldest: Time?}
+
+  # A tail-pass candidate. The date decides whether the probe's long-form
+  # answer may be trusted yet, so it is read with the id.
+  alias TailRow = {id: String, published: Time?}
 
   def initialize(@db)
   end
@@ -47,7 +58,8 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
       end
 
       begin
-        classified = run_window_pass + run_tail_pass
+        labelled, windows_read = run_window_pass
+        classified = labelled + run_tail_pass(windows_read)
         LOGGER.debug("ClassifyChannelVideosJob: classified #{classified} video(s)")
       rescue ex
         LOGGER.error("ClassifyChannelVideosJob: #{ex.message}")
@@ -57,8 +69,11 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     end
   end
 
-  private def run_window_pass : Int32
+  # Also hands back the channels whose windows it managed to read, which are
+  # the only ones the tail pass may answer for.
+  private def run_window_pass : {Int32, Array(String)}
     labelled = 0
+    windows_read = [] of String
 
     pending_channels.each do |ucid|
       begin
@@ -68,6 +83,7 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
         # Eliminating against a half-read pair would call a Short long-form.
         next if shorts.nil? || lives.nil?
 
+        windows_read << ucid
         changed = apply_window(ucid, shorts, lives)
         mark_feeds_stale([ucid]) if changed > 0
         labelled += changed
@@ -76,12 +92,12 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
       end
     end
 
-    labelled
+    {labelled, windows_read}
   end
 
   private def apply_window(ucid : String, shorts : Window, lives : Window) : Int32
-    labelled = write_kind(shorts[:ids], Invidious::ArikFeedKinds::KIND_SHORT)
-    labelled += write_kind(lives[:ids], Invidious::ArikFeedKinds::KIND_LIVE)
+    labelled = correct_kind(shorts[:ids], Invidious::ArikFeedKinds::KIND_SHORT)
+    labelled += correct_kind(lives[:ids] - shorts[:ids], Invidious::ArikFeedKinds::KIND_LIVE)
 
     settled = Time.utc - SHORTS_FEED_LAG
 
@@ -139,26 +155,43 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     PG_DB.query_all(request, ids, as: String)
   end
 
-  private def run_tail_pass : Int32
+  # Only the channels `run_window_pass` just read, so the windows have already
+  # claimed every Short and stream VOD they carry before a probe can guess at
+  # one. Table-wide, the probe could reach a VOD in a channel whose UULV feed
+  # nobody had looked at yet.
+  private def run_tail_pass(windows_read : Array(String)) : Int32
     labelled = 0
     written = [] of String
 
-    pending_tail_videos.each do |id|
+    pending_tail_videos(windows_read).each do |row|
       begin
-        kind = probe_kind(id)
+        kind = probe_kind(row[:id])
         next if kind.nil?
+        next if kind == Invidious::ArikFeedKinds::KIND_VIDEO && !long_form_settled?(row[:published])
 
-        if write_kind([id], kind) > 0
+        if write_kind([row[:id]], kind) > 0
           labelled += 1
-          written << id
+          written << row[:id]
         end
       rescue ex
-        LOGGER.error("ClassifyChannelVideosJob: probe #{id} : #{ex.message}")
+        LOGGER.error("ClassifyChannelVideosJob: probe #{row[:id]} : #{ex.message}")
       end
     end
 
     mark_feeds_stale(channels_of(written))
     labelled
+  end
+
+  # Whether the UULV window has had long enough to claim this row, so that
+  # "not a Short" can be read as long-form. A row with no date is not waiting
+  # on a window and never will be, so it is settled rather than held back --
+  # holding it back would leave it unlabelled for ever and, because
+  # `pending_channels` ranks by how many NULL rows a channel has, would pin its
+  # channel and starve the rest.
+  private def long_form_settled?(published : Time?) : Bool
+    return true if published.nil?
+
+    published < Time.utc - LIVE_FEED_LAG
   end
 
   private def feed_window(ucid : String, kind : String) : Window?
@@ -204,7 +237,7 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   private def probe_kind(id : String) : String?
     sleep REQUEST_DELAY
     response = YT_POOL.client &.head(Invidious::ArikFeedKinds.shorts_probe_resource(id))
-    Invidious::ArikFeedKinds.kind_from_probe_status(response.status_code)
+    Invidious::ArikFeedKinds.kind_from_probe(response.status_code, response.headers["location"]?, id)
   rescue ex
     LOGGER.trace("ClassifyChannelVideosJob: probe #{id} : #{ex.message}")
     nil
@@ -222,24 +255,45 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
     PG_DB.query_all(request, CHANNELS_PER_TICK, as: String)
   end
 
-  private def pending_tail_videos : Array(String)
+  private def pending_tail_videos(ucids : Array(String)) : Array(TailRow)
+    return [] of TailRow if ucids.empty?
+
     request = <<-SQL
-      SELECT id FROM channel_videos
-      WHERE kind IS NULL
-      ORDER BY published DESC
-      LIMIT $1
+      SELECT id, published FROM channel_videos
+      WHERE kind IS NULL AND ucid = ANY($1)
+      ORDER BY (published IS NULL OR published < $3) DESC, published DESC NULLS FIRST
+      LIMIT $2
     SQL
 
-    PG_DB.query_all(request, PROBES_PER_TICK, as: String)
+    PG_DB.query_all(request, ucids, PROBES_PER_TICK, Time.utc - LIVE_FEED_LAG,
+      as: {id: String, published: Time?})
   end
 
-  # Only ever writes over NULL, so a later pass cannot undo the probe's answer.
+  # An inference, so it only ever writes over NULL: a probe that guessed must
+  # not be able to undo a window's answer.
   private def write_kind(ids : Array(String), kind : String) : Int32
     return 0 if ids.empty?
 
     request = <<-SQL
       UPDATE channel_videos SET kind = $1
       WHERE id = ANY($2) AND kind IS NULL
+    SQL
+
+    PG_DB.exec(request, kind, ids).rows_affected.to_i32
+  end
+
+  # YouTube's own per-kind uploads playlist named these rows, so this overrides
+  # whatever an inference put there — the `kind IS NULL` gate on the window's
+  # answer is what used to freeze a probe's guess for good.
+  #
+  # `IS DISTINCT FROM` covers NULL as well, and keeps rows_affected to the rows
+  # that really changed, which is what mark_feeds_stale keys off.
+  private def correct_kind(ids : Array(String), kind : String) : Int32
+    return 0 if ids.empty?
+
+    request = <<-SQL
+      UPDATE channel_videos SET kind = $1
+      WHERE id = ANY($2) AND kind IS DISTINCT FROM $1
     SQL
 
     PG_DB.exec(request, kind, ids).rows_affected.to_i32

@@ -44,18 +44,46 @@ Spectator.describe Invidious::ArikFeedKinds do
     end
   end
 
-  describe ".kind_from_probe_status" do
-    it "reads YouTube's answer: 200 is a Short, a redirect is not" do
-      expect(Kinds.kind_from_probe_status(200)).to eq("short")
-      expect(Kinds.kind_from_probe_status(303)).to eq("video")
-      expect(Kinds.kind_from_probe_status(301)).to eq("video")
-      expect(Kinds.kind_from_probe_status(302)).to eq("video")
+  describe ".kind_from_probe" do
+    let(watch) { "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }
+
+    it "reads YouTube's answer: 200 is a Short" do
+      expect(Kinds.kind_from_probe(200, nil, "dQw4w9WgXcQ")).to eq("short")
+    end
+
+    it "reads a redirect to the video's own watch page as long-form" do
+      expect(Kinds.kind_from_probe(303, watch, "dQw4w9WgXcQ")).to eq("video")
+      expect(Kinds.kind_from_probe(301, watch, "dQw4w9WgXcQ")).to eq("video")
+      expect(Kinds.kind_from_probe(302, watch, "dQw4w9WgXcQ")).to eq("video")
+      expect(Kinds.kind_from_probe(303, "/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ")).to eq("video")
+    end
+
+    it "gives no answer for a consent interstitial" do
+      consent = "https://consent.youtube.com/m?continue=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ"
+
+      expect(Kinds.kind_from_probe(302, consent, "dQw4w9WgXcQ")).to be_nil
+    end
+
+    it "gives no answer for a bot check" do
+      sorry = "https://www.google.com/sorry/index?continue=https%3A%2F%2Fwww.youtube.com%2Fshorts%2FdQw4w9WgXcQ"
+
+      expect(Kinds.kind_from_probe(302, sorry, "dQw4w9WgXcQ")).to be_nil
+    end
+
+    it "gives no answer for a redirect to a different video" do
+      expect(Kinds.kind_from_probe(303, watch, "SomeOtherVid")).to be_nil
+    end
+
+    it "gives no answer for a redirect with no destination" do
+      expect(Kinds.kind_from_probe(303, nil, "dQw4w9WgXcQ")).to be_nil
+      expect(Kinds.kind_from_probe(303, "", "dQw4w9WgXcQ")).to be_nil
+      expect(Kinds.kind_from_probe(303, "https://www.youtube.com/watch", "dQw4w9WgXcQ")).to be_nil
     end
 
     it "gives no answer for a status that carries none" do
-      expect(Kinds.kind_from_probe_status(429)).to be_nil
-      expect(Kinds.kind_from_probe_status(500)).to be_nil
-      expect(Kinds.kind_from_probe_status(404)).to be_nil
+      expect(Kinds.kind_from_probe(429, watch, "dQw4w9WgXcQ")).to be_nil
+      expect(Kinds.kind_from_probe(500, watch, "dQw4w9WgXcQ")).to be_nil
+      expect(Kinds.kind_from_probe(404, watch, "dQw4w9WgXcQ")).to be_nil
     end
   end
 

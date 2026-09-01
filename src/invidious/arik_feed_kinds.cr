@@ -1,4 +1,5 @@
 require "json"
+require "uri"
 
 # Content kinds for subscription feed entries (ArikTube extension).
 #
@@ -49,14 +50,32 @@ module Invidious::ArikFeedKinds
     "/shorts/#{id}"
   end
 
-  # YouTube answers 200 for a Short, 303 for anything else. A status that says
-  # nothing leaves the row unclassified rather than guessing.
-  def kind_from_probe_status(status : Int32) : String?
-    case status
-    when 200                     then KIND_SHORT
-    when 301, 302, 303, 307, 308 then KIND_VIDEO
-    else                              nil
-    end
+  REDIRECT_STATUSES = [301, 302, 303, 307, 308]
+
+  # YouTube answers 200 for a Short and redirects anything else to that video's
+  # watch page. A status that says nothing leaves the row unclassified rather
+  # than guessing.
+  #
+  # The destination is checked, not just the status: a consent interstitial, a
+  # /sorry/ bot check and a geo redirect are all 3xx too, and reading those as
+  # a positive answer would relabel the whole backlog at PROBES_PER_TICK rows
+  # a tick.
+  def kind_from_probe(status : Int32, location : String?, id : String) : String?
+    return KIND_SHORT if status == 200
+    return nil if !REDIRECT_STATUSES.includes?(status)
+    return nil if location.nil?
+
+    watch_redirect?(location, id) ? KIND_VIDEO : nil
+  end
+
+  # Whether `location` is this very video's watch page.
+  private def watch_redirect?(location : String, id : String) : Bool
+    uri = URI.parse(location)
+    return false if uri.path != "/watch"
+
+    uri.query_params["v"]? == id
+  rescue
+    false
   end
 
   def known?(kind : String?) : Bool
