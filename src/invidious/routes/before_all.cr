@@ -89,8 +89,12 @@ module Invidious::Routes::BeforeAll
       end
     end
 
-    # ArikTube: open or provision the session asserted by the reverse proxy
-    if asserted_email = Invidious::TrustedHeaderAuth.asserted_email(env)
+    # ArikTube: open or provision the session asserted by the reverse proxy.
+    # Signing out is exempt: the proxy still asserts the identity on that very
+    # request, so minting here would replace the session signout is deleting.
+    signing_out = env.request.resource.starts_with?("/signout")
+
+    if !signing_out && (asserted_email = Invidious::TrustedHeaderAuth.asserted_email(env))
       sid = Invidious::TrustedHeaderAuth.ensure_session(env, sid, asserted_email)
     end
 
