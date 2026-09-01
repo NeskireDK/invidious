@@ -171,9 +171,12 @@ module Invidious::ArikSettings
   # consent screen nobody saw.
   AUTO_APPROVED_SCOPES = [":feed", ":subscriptions*", ":playlists*", ":history*", ":notifications*"]
 
-  # An auto-approved token is a convenience, not a durable credential: the
-  # client holds a proxy session and can ask for another one without a click.
-  AUTO_APPROVED_TOKEN_LIFETIME = 30.days
+  # The point of the cap is that the grant is bounded at all, not that it is
+  # short. Materialious sends no `expire` and has no re-authentication path:
+  # once a token 403s, its UI stays logged in while subscriptions and history
+  # fail silently until somebody clicks login again. A year bounds the
+  # credential without turning that into a routine event.
+  AUTO_APPROVED_TOKEN_LIFETIME = 1.year
 
   # Every HTTP method, which is what a scope with an empty method list means.
   SCOPE_METHODS = %w(DELETE GET HEAD OPTIONS PATCH POST PUT)

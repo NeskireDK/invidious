@@ -393,7 +393,7 @@ https_only: false
 ## the callback origin must match an entry whole. Empty = every client
 ## sees the consent page. A grant made this way is clamped: the feed,
 ## subscriptions, playlists, history and notifications scopes only, and
-## an expiry of at most 30 days whatever the request asked for. Each one
+## an expiry of at most a year whatever the request asked for. Each one
 ## is logged.
 ##
 ## Default: disabled
