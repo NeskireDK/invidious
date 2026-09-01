@@ -156,8 +156,10 @@ class Config
   property use_pubsub_feeds : Bool | Int32 = false
   property popular_enabled : Bool = true
   # Playlist-backed feeds (ArikTube extension): when set, the Trending or
-  # Popular feed serves these local PUBLIC playlists (merged in order,
-  # duplicates dropped) instead of the stock feed content.
+  # Popular feed serves these local playlists (merged in order, duplicates
+  # dropped) instead of the stock feed content. Public and Unlisted both
+  # qualify — see PlaylistPrivacy#feedable? — and both feeds are served
+  # without authentication.
   property trending_playlists : Array(String) = [] of String
   property popular_playlists : Array(String) = [] of String
   # Content kinds the subscription feed admits (ArikTube extension): "video",
