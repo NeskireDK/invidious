@@ -112,6 +112,19 @@ module Invidious::ArikFeedKinds
     {nil, "not a JSON list of content kinds (#{ex.message})"}
   end
 
+  # The kinds a view's predicate admits, as the marker that view carries.
+  #
+  # Normalized through `clean_kinds`, so the same setting written in a
+  # different order cannot read as a different marker and send the job into a
+  # rebuild every tick. Only ever built from KINDS, so it is safe to
+  # interpolate into the COMMENT statement that stamps it.
+  def view_marker(allowed : Array(String)) : String
+    admitted, _ = clean_kinds(allowed)
+    admitted = KINDS if view_predicate(admitted).empty?
+
+    "arik_feed_kinds:#{admitted.join(",")}"
+  end
+
   # `IS NULL` is inside the predicate so the fail-open rule holds within the
   # materialized view too. Only ever receives `clean_kinds` output.
   def view_predicate(allowed : Array(String), column : String = "kind") : String
