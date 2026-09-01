@@ -1,9 +1,13 @@
 # Labels subscription feed rows with their content kind (ArikTube extension).
 #
-# A separate job rather than an edit to `fetch_channel`: this branch rebases
-# onto release tags, and that function is one upstream changes most. `kind` is
-# also absent from the insert's `ON CONFLICT DO UPDATE` set, so a channel
+# A separate job rather than an edit to `fetch_channel`: this branch tracks
+# upstream release tags, and that function is one upstream changes most. `kind`
+# is also absent from the insert's `ON CONFLICT DO UPDATE` set, so a channel
 # refresh cannot overwrite a label.
+#
+# Tracks by MERGING a release tag in, not by rebasing. `arik` is the branch CI
+# publishes :latest from, so rewriting its commits would mean force-pushing a
+# deploy branch.
 #
 # Two passes, because a 15-entry feed window cannot answer for the whole table:
 # the Shorts and live windows per channel, then a capped `/shorts/<id>` probe
