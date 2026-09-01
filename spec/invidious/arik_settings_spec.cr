@@ -108,6 +108,35 @@ Spectator.describe Invidious::ArikSettings do
     end
   end
 
+  describe ".normalise_feed_kinds!" do
+    it "cleans a config-file value, so the predicate and the marker agree" do
+      config = FakeConfig.new
+      config.feed_kinds = ["VIDEO", " video ", "bogus"]
+
+      Settings.normalise_feed_kinds!(config)
+
+      expect(config.feed_kinds).to eq(["video"])
+    end
+
+    it "orders and deduplicates whatever the file said" do
+      config = FakeConfig.new
+      config.feed_kinds = ["live", "short", "live"]
+
+      Settings.normalise_feed_kinds!(config)
+
+      expect(config.feed_kinds).to eq(["short", "live"])
+    end
+
+    it "runs on the config-file path, where no override is stored" do
+      config = FakeConfig.new
+      config.feed_kinds = ["Short"]
+
+      Settings.merge_overrides!(config, nil, nil, nil, nil)
+
+      expect(config.feed_kinds).to eq(["short"])
+    end
+  end
+
   # ------------------------------------------------------------------
   #  Decoding stored rows
   # ------------------------------------------------------------------

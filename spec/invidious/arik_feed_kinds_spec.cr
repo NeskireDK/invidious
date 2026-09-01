@@ -138,6 +138,34 @@ Spectator.describe Invidious::ArikFeedKinds do
     end
   end
 
+  describe ".view_marker" do
+    it "names the kinds the predicate admits" do
+      expect(Kinds.view_marker(["video"])).to eq("arik_feed_kinds:video")
+      expect(Kinds.view_marker(["video", "live"])).to eq("arik_feed_kinds:video,live")
+    end
+
+    it "names every kind when the predicate is absent" do
+      every = "arik_feed_kinds:video,short,live"
+
+      expect(Kinds.view_marker([] of String)).to eq(every)
+      expect(Kinds.view_marker(["video", "short", "live"])).to eq(every)
+    end
+
+    it "reads the same however the setting was written" do
+      expect(Kinds.view_marker(["live", "video"])).to eq(Kinds.view_marker(["video", "live"]))
+      expect(Kinds.view_marker(["VIDEO", " video "])).to eq(Kinds.view_marker(["video"]))
+    end
+
+    it "tells two different predicates apart" do
+      expect(Kinds.view_marker(["video"])).not_to eq(Kinds.view_marker(["video", "short"]))
+      expect(Kinds.view_marker(["video"])).not_to eq(Kinds.view_marker([] of String))
+    end
+
+    it "carries nothing that needs quoting into the COMMENT statement" do
+      expect(Kinds.view_marker(["video", "short", "live"])).to match(/\A[a-z_]+:[a-z,]+\z/)
+    end
+  end
+
   describe ".view_predicate" do
     it "admits NULL alongside the configured kinds" do
       predicate = Kinds.view_predicate(["video"], "cv.kind")

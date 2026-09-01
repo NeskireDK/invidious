@@ -338,6 +338,22 @@ module Invidious::ArikSettings
     config.trending_playlists = trending_playlists if trending_playlists
     trusted_header_auth.try &.apply_to(config.trusted_header_auth)
     config.feed_kinds = feed_kinds if feed_kinds
+    normalise_feed_kinds!(config)
+  end
+
+  # `view_predicate` interpolates its argument verbatim and its docstring says it
+  # only ever receives `clean_kinds` output -- but the config-file path reaches it
+  # unnormalised, while `view_marker` cleans first. A `feed_kinds: [VIDEO]` would
+  # then build a predicate matching no labelled row and stamp it with a marker
+  # claiming it was correct. Clean once here so both derive from one array.
+  def normalise_feed_kinds!(config) : Nil
+    cleaned, errors = ArikFeedKinds.clean_kinds(config.feed_kinds)
+
+    errors.each do |error|
+      LOGGER.error("ArikSettings: ignoring configured feed kind — #{error}")
+    end
+
+    config.feed_kinds = cleaned
   end
 
   # ------------------------------------------------------------------
