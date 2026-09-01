@@ -202,9 +202,11 @@ Invidious::Jobs.register Invidious::Jobs::InstanceListRefreshJob.new
 Invidious::Jobs.start_all
 
 def popular_videos
-  # ArikTube: playlist-backed Popular
+  # ArikTube: playlist-backed Popular, off the same once-a-minute snapshot the
+  # stock feed uses. /api/v1/popular is on a router with no authentication, so
+  # a per-request read here would be internet-reachable database work.
   unless CONFIG.popular_playlists.empty?
-    return Invidious::PlaylistFeeds.feed_videos(CONFIG.popular_playlists)
+    return Invidious::Jobs::PullPopularVideosJob::POPULAR_PLAYLIST_VIDEOS.get
   end
 
   Invidious::Jobs::PullPopularVideosJob::POPULAR_VIDEOS.get
