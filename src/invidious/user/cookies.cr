@@ -8,6 +8,11 @@ struct Invidious::User
     # used in here are not booleans.
     @@secure = (Kemal.config.ssl || CONFIG.https_only) ? true : false
 
+    # How long a SID cookie is valid for, and therefore the longest a
+    # session_ids row can still be presented by a browser. ClearExpiredItemsJob
+    # reaps against this, so the two cannot drift apart.
+    SID_LIFETIME = 2.years
+
     # Session ID (SID) cookie
     # Parameter "domain" comes from the global config
     def sid(domain : String?, sid) : HTTP::Cookie
@@ -22,7 +27,7 @@ struct Invidious::User
         name: "SID",
         domain: domain,
         value: sid,
-        expires: Time.utc + 2.years,
+        expires: Time.utc + SID_LIFETIME,
         secure: @@secure,
         http_only: true,
         samesite: HTTP::Cookie::SameSite::Lax

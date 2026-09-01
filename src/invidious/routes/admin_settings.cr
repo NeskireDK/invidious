@@ -28,7 +28,7 @@ module Invidious::Routes::AdminSettings
     sid = env.get("sid").as(String)
     csrf_token = generate_response(sid, {":admin/settings"}, HMAC_KEY)
 
-    playlists = self.public_playlists
+    playlists = self.feedable_playlists
     popular = CONFIG.popular_playlists
     trending = CONFIG.trending_playlists
     trusted_header_auth = ArikSettings::TrustedHeaderAuthSettings.from_config(CONFIG.trusted_header_auth)
@@ -65,7 +65,7 @@ module Invidious::Routes::AdminSettings
     end
 
     csrf_token = generate_response(sid, {":admin/settings"}, HMAC_KEY)
-    playlists = self.public_playlists
+    playlists = self.feedable_playlists
 
     errors = [] of String
     saved = false
@@ -154,10 +154,10 @@ module Invidious::Routes::AdminSettings
 
   # The playlists a feed may serve, for the tick-box lists. A database that
   # can't answer costs the lists, not the page.
-  private def public_playlists : Array(InvidiousPlaylist)
+  private def feedable_playlists : Array(InvidiousPlaylist)
     Invidious::Database::Playlists.select_feedable
   rescue ex
-    LOGGER.error("AdminSettings: cannot list public playlists (#{ex.message})")
+    LOGGER.error("AdminSettings: cannot list the feedable playlists (#{ex.message})")
     [] of InvidiousPlaylist
   end
 

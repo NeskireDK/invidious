@@ -108,6 +108,35 @@ Spectator.describe Invidious::ArikSettings do
     end
   end
 
+  describe ".normalise_feed_kinds!" do
+    it "cleans a config-file value, so the predicate and the marker agree" do
+      config = FakeConfig.new
+      config.feed_kinds = ["VIDEO", " video ", "bogus"]
+
+      Settings.normalise_feed_kinds!(config)
+
+      expect(config.feed_kinds).to eq(["video"])
+    end
+
+    it "orders and deduplicates whatever the file said" do
+      config = FakeConfig.new
+      config.feed_kinds = ["live", "short", "live"]
+
+      Settings.normalise_feed_kinds!(config)
+
+      expect(config.feed_kinds).to eq(["short", "live"])
+    end
+
+    it "runs on the config-file path, where no override is stored" do
+      config = FakeConfig.new
+      config.feed_kinds = ["Short"]
+
+      Settings.merge_overrides!(config, nil, nil, nil, nil)
+
+      expect(config.feed_kinds).to eq(["short"])
+    end
+  end
+
   # ------------------------------------------------------------------
   #  Decoding stored rows
   # ------------------------------------------------------------------
@@ -509,6 +538,54 @@ Spectator.describe Invidious::ArikSettings do
 
       expect(plids).to be_empty
       expect(errors).to be_empty
+    end
+  end
+  describe ".clamp_auto_approved_scopes" do
+    it "keeps what Materialious asks for" do
+      requested = ":feed,:subscriptions*,:playlists*,:history*,:notifications*".split(",")
+
+      expect(Settings.clamp_auto_approved_scopes(requested)).to eq(requested)
+    end
+
+    it "drops a scope wider than the allowance" do
+      expect(Settings.clamp_auto_approved_scopes([":*"])).to be_empty
+      expect(Settings.clamp_auto_approved_scopes([":feed", ":*"])).to eq([":feed"])
+    end
+
+    it "keeps a scope narrower than the allowance" do
+      expect(Settings.clamp_auto_approved_scopes(["GET:playlists"])).to eq(["GET:playlists"])
+    end
+
+    it "drops a scope the allowance does not name at all" do
+      expect(Settings.clamp_auto_approved_scopes([":preferences*"])).to be_empty
+      expect(Settings.clamp_auto_approved_scopes([":tokens*"])).to be_empty
+    end
+
+    it "drops a malformed scope instead of raising" do
+      expect(Settings.clamp_auto_approved_scopes(["feed", "", "::"])).to be_empty
+    end
+  end
+
+  describe ".clamp_auto_approved_expire" do
+    let(now) { Time.utc(2026, 9, 1, 12, 0, 0) }
+    let(cap) { (now + Invidious::ArikSettings::AUTO_APPROVED_TOKEN_LIFETIME).to_unix }
+
+    it "bounds a token that asked for no expiry at all" do
+      expect(Settings.clamp_auto_approved_expire(nil, now)).to eq(cap)
+    end
+
+    it "bounds an expiry past the cap" do
+      expect(Settings.clamp_auto_approved_expire(2_000_000_000, now)).to eq(cap)
+    end
+
+    it "honors an expiry inside the cap" do
+      sooner = (now + 1.hour).to_unix
+
+      expect(Settings.clamp_auto_approved_expire(sooner.to_i32, now)).to eq(sooner)
+    end
+
+    it "never mints a token already expired" do
+      expect(Settings.clamp_auto_approved_expire(0, now)).to eq(now.to_unix)
     end
   end
 end

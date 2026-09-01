@@ -46,10 +46,6 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   # answer may be trusted yet, so it is read with the id.
   alias TailRow = {id: String, published: Time?}
 
-  # Kinds the existing views were built for. In the database, not memory, so a
-  # restart does no DDL.
-  APPLIED_KEY = "feed_kinds_applied"
-
   def initialize(@db)
   end
 
@@ -306,18 +302,23 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
   # A materialized view bakes the predicate in at CREATE time and `REFRESH`
   # re-runs that stored definition, so a view made before this feature keeps
   # serving every kind until it is recreated.
+  #
+  # The views themselves say what they were built for, so nothing here records
+  # intent: a rebuild that failed leaves the marker it failed to write, and the
+  # next tick tries again.
   private def reconcile_subscription_views : Nil
-    applied, _ = Invidious::ArikFeedKinds.decode_kinds(
-      Invidious::ArikSettings.fetch(APPLIED_KEY))
-    wanted, _ = Invidious::ArikFeedKinds.clean_kinds(CONFIG.feed_kinds)
-    return if applied == wanted && views_current?
+    return if views_current?
 
-    # Only on a clean sweep: a marker written after a failed rebuild would
-    # stop the job ever trying again.
-    Invidious::ArikSettings.store(APPLIED_KEY, wanted.to_json) if rebuild_subscription_views
+    rebuild_subscription_views
   end
 
-  # False when any user's view is missing or predates the `kind` column.
+  # False when any user's view is missing, or carries a feed-kinds marker other
+  # than the one the configuration asks for.
+  #
+  # The marker is read off the view object. Checking that the view has a `kind`
+  # attribute — which is what this used to do — proves nothing:
+  # MATERIALIZED_VIEW_SQL is `SELECT cv.*`, so `kind` is a column of every
+  # post-migration view whatever its predicate admits.
   #
   # pg_catalog, not information_schema: materialized views do not appear in
   # information_schema at all, so a check there silently passes for ever.
@@ -328,31 +329,29 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
       SELECT count(*) FROM users u
       WHERE NOT EXISTS (
         SELECT 1 FROM pg_class c
-        JOIN pg_attribute a
-          ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
         WHERE c.relkind = 'm'
           AND c.relname = left('subscriptions_' || encode(sha256(u.email::bytea), 'hex'), 63)
-          AND a.attname = 'kind'
+          AND obj_description(c.oid, 'pg_class') = $1
       )
     SQL
 
-    PG_DB.query_one(request, as: Int64) == 0
+    marker = Invidious::ArikFeedKinds.view_marker(CONFIG.feed_kinds)
+
+    PG_DB.query_one(request, marker, as: Int64) == 0
   end
 
   # Builds each view beside the live one and swaps it in, so a CREATE that
   # fails leaves the user's feed alone. Dropping first cost both subscription
   # feeds on 2026-08-30, when the column the new definition referenced did not
   # exist yet.
-  private def rebuild_subscription_views : Bool
-    swept = true
-
+  private def rebuild_subscription_views : Nil
     PG_DB.query_all("SELECT email FROM users", as: String).each do |email|
       view = "subscriptions_#{sha256(email)}"
       staging = "arik_staging_#{sha256(email)[0..31]}"
 
       begin
         PG_DB.exec("DROP MATERIALIZED VIEW IF EXISTS #{staging}")
-        PG_DB.exec("CREATE MATERIALIZED VIEW #{staging} AS #{MATERIALIZED_VIEW_SQL.call(email)}")
+        create_subscription_view(PG_DB, staging, email)
 
         PG_DB.transaction do |tx|
           tx.connection.exec("DROP MATERIALIZED VIEW IF EXISTS #{view}")
@@ -361,12 +360,9 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
 
         LOGGER.info("ClassifyChannelVideosJob: rebuilt #{view} for kinds #{CONFIG.feed_kinds.join(",")}")
       rescue ex
-        swept = false
         LOGGER.error("ClassifyChannelVideosJob: cannot rebuild #{view} (#{ex.message})")
         PG_DB.exec("DROP MATERIALIZED VIEW IF EXISTS #{staging}") rescue nil
       end
     end
-
-    swept
   end
 end

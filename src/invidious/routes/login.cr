@@ -126,7 +126,7 @@ module Invidious::Routes::Login
         Invidious::Database::SessionIDs.insert(sid, email)
 
         view_name = "subscriptions_#{sha256(user.email)}"
-        PG_DB.exec("CREATE MATERIALIZED VIEW #{view_name} AS #{MATERIALIZED_VIEW_SQL.call(user.email)}")
+        create_subscription_view(PG_DB, view_name, user.email)
 
         if alt = CONFIG.alternative_domains.index(host)
           env.response.cookies["SID"] = Invidious::User::Cookies.sid(CONFIG.alternative_domains[alt], sid)

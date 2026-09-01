@@ -165,6 +165,76 @@ module Invidious::ArikSettings
     asserted_email == user_email
   end
 
+  # Scopes Materialious asks for, and therefore the widest grant the
+  # consent-free path may hand out. `scopes` arrives on the query string, so
+  # without a clamp a crafted `scopes=:*` mints a full-scope token past a
+  # consent screen nobody saw.
+  AUTO_APPROVED_SCOPES = [":feed", ":subscriptions*", ":playlists*", ":history*", ":notifications*"]
+
+  # The point of the cap is that the grant is bounded at all, not that it is
+  # short. Materialious sends no `expire` and has no re-authentication path:
+  # once a token 403s, its UI stays logged in while subscriptions and history
+  # fail silently until somebody clicks login again. A year bounds the
+  # credential without turning that into a routine event.
+  AUTO_APPROVED_TOKEN_LIFETIME = 1.year
+
+  # Every HTTP method, which is what a scope with an empty method list means.
+  SCOPE_METHODS = %w(DELETE GET HEAD OPTIONS PATCH POST PUT)
+
+  # `requested` narrowed to what AUTO_APPROVED_SCOPES already covers, so an
+  # entry asking for more is dropped rather than granted.
+  def clamp_auto_approved_scopes(requested : Array(String)) : Array(String)
+    requested.select { |scope| auto_approvable_scope?(scope) }
+  end
+
+  # A bounded expiry, as a unix timestamp. An absent `expire` would otherwise
+  # mint a token with no expiry field at all, which never ages out; a request
+  # for less than the cap is honored.
+  def clamp_auto_approved_expire(requested : Int32?, now : Time = Time.utc) : Int64
+    cap = (now + AUTO_APPROVED_TOKEN_LIFETIME).to_unix
+    return cap if requested.nil?
+
+    requested.to_i64.clamp(now.to_unix, cap)
+  end
+
+  # True when one of AUTO_APPROVED_SCOPES already covers `scope`, so granting
+  # it widens nothing.
+  #
+  # Not `scopes_include_scope`: that compares the two method lists as ordered
+  # arrays and expands an empty list on the granting side only, so it answers
+  # false for ":feed" against ":feed". Correct for the per-request check it was
+  # written for, where the asking side is always one method.
+  private def auto_approvable_scope?(scope : String) : Bool
+    methods, endpoint = split_scope(scope)
+    return false if endpoint.nil?
+    return false if endpoint.empty?
+
+    AUTO_APPROVED_SCOPES.any? do |allowed|
+      allowed_methods, allowed_endpoint = split_scope(allowed)
+      next false if allowed_endpoint.nil?
+
+      (methods - allowed_methods).empty? && endpoint_covered?(allowed_endpoint, endpoint)
+    end
+  end
+
+  # A scope's method set and endpoint. An empty method list stands for every
+  # method; a string without a separator is not a scope at all.
+  private def split_scope(scope : String) : {Array(String), String?}
+    return {SCOPE_METHODS, nil} if !scope.includes?(':')
+
+    methods, _, endpoint = scope.partition(':')
+    named = methods.split(';').map(&.strip.upcase).reject(&.empty?)
+
+    {named.empty? ? SCOPE_METHODS : named, endpoint.strip.downcase}
+  end
+
+  # A trailing "*" is a prefix, as `scope_includes_scope` reads it.
+  private def endpoint_covered?(allowed : String, requested : String) : Bool
+    return requested.starts_with?(allowed.rchop("*")) if allowed.ends_with?("*")
+
+    requested == allowed
+  end
+
   # Whether a token authorization request may skip the consent page.
   #
   # Every condition has to hold: header auth is on, the admin listed at least
@@ -338,6 +408,22 @@ module Invidious::ArikSettings
     config.trending_playlists = trending_playlists if trending_playlists
     trusted_header_auth.try &.apply_to(config.trusted_header_auth)
     config.feed_kinds = feed_kinds if feed_kinds
+    normalise_feed_kinds!(config)
+  end
+
+  # `view_predicate` interpolates its argument verbatim and its docstring says it
+  # only ever receives `clean_kinds` output -- but the config-file path reaches it
+  # unnormalised, while `view_marker` cleans first. A `feed_kinds: [VIDEO]` would
+  # then build a predicate matching no labelled row and stamp it with a marker
+  # claiming it was correct. Clean once here so both derive from one array.
+  def normalise_feed_kinds!(config) : Nil
+    cleaned, errors = ArikFeedKinds.clean_kinds(config.feed_kinds)
+
+    errors.each do |error|
+      LOGGER.error("ArikSettings: ignoring configured feed kind — #{error}")
+    end
+
+    config.feed_kinds = cleaned
   end
 
   # ------------------------------------------------------------------

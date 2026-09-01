@@ -106,8 +106,13 @@ module Invidious::TrustedHeaderAuth
 
   # Same steps as manual registration (routes/login.cr), with a random
   # password nobody knows. The materialized view is required — without it
-  # the subscriptions feed raises. Both statements tolerate a concurrent
-  # provision of the same user (parallel first-page requests).
+  # the subscriptions feed raises. Both steps tolerate a concurrent provision
+  # of the same user (parallel first-page requests).
+  #
+  # No `IF NOT EXISTS` on the view: that would stamp an already existing view
+  # with the current feed kinds without having rebuilt it. A view this call
+  # could not create is left for ClassifyChannelVideosJob, which checks every
+  # view's own marker and rebuilds what disagrees.
   private def provision_user(email : String)
     random_password = Base64.urlsafe_encode(Random::Secure.random_bytes(32))
     user, _ = create_user("", email, random_password)
@@ -115,6 +120,10 @@ module Invidious::TrustedHeaderAuth
     Invidious::Database::Users.insert(user, update_on_conflict: true)
 
     view_name = "subscriptions_#{sha256(user.email)}"
-    PG_DB.exec("CREATE MATERIALIZED VIEW IF NOT EXISTS #{view_name} AS #{MATERIALIZED_VIEW_SQL.call(user.email)}")
+    begin
+      create_subscription_view(PG_DB, view_name, user.email)
+    rescue ex
+      LOGGER.debug("TrustedHeaderAuth: cannot create #{view_name} (#{ex.message})")
+    end
   end
 end
