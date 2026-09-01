@@ -232,8 +232,8 @@ module Invidious::Routes::Account
       granted_expire = Invidious::ArikSettings.clamp_auto_approved_expire(expire)
       access_token = generate_token(user.email, granted_scopes, granted_expire, HMAC_KEY)
 
-      LOGGER.info("authorize_token: auto-approved #{user.email} for \
-                   #{Invidious::ArikSettings.normalize_origin(callback_url)}, \
+      origin = Invidious::ArikSettings.normalize_origin(callback_url)
+      LOGGER.info("authorize_token: auto-approved #{user.email} for #{origin}, \
                    scopes [#{granted_scopes.join(" ")}], \
                    expires #{Time.unix(granted_expire).to_rfc3339}")
 
