@@ -12,37 +12,18 @@
 module Invidious::TrustedHeaderAuth
   extend self
 
-  # "::ffff:192.168.1.101" and "192.168.1.101" are the same peer
-  private def normalize_ip(address : String) : String
-    address.lchop("::ffff:")
-  end
-
-  private def trusted_peer?(env) : Bool
-    remote = env.request.remote_address.as?(Socket::IPAddress)
-    return false unless remote
-
-    peer = normalize_ip(remote.address)
-    CONFIG.trusted_header_auth.trusted_proxies.any? { |address| normalize_ip(address) == peer }
-  end
-
   # The user name asserted by the proxy, or nil when absent or untrusted.
+  # The decision itself is ArikHeaderGate's; this reads the request for it.
   def asserted_email(env) : String?
     config = CONFIG.trusted_header_auth
-    return nil unless config.enabled
 
-    # API clients (Yattee, bots) authenticate with tokens only
-    return nil if env.request.path.starts_with?("/api/")
-
-    values = env.request.headers.get?(config.header)
-    return nil unless values
-    # A duplicated header is an attack indicator: reject the request
-    return nil if values.size != 1
-
-    email = values[0].strip.downcase.byte_slice(0, 254)
-    return nil if email.empty?
-    return nil unless trusted_peer?(env)
-
-    email
+    ArikHeaderGate.asserted_email(
+      config.enabled,
+      env.request.path,
+      env.request.headers.get?(config.header),
+      config.trusted_proxies,
+      env.request.remote_address.as?(Socket::IPAddress).try(&.address)
+    )
   end
 
   # Whether a token authorization request may skip the consent page.
