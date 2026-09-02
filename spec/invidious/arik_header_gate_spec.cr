@@ -49,7 +49,7 @@ Spectator.describe Invidious::ArikHeaderGate do
     end
 
     it "trusts nobody when the list is empty" do
-      expect(Gate.trusted_peer?([] of String, Request::PROXY)).to be_false
+      expect(Gate.trusted_peer?(Array(String).new, Request::PROXY)).to be_false
     end
 
     it "refuses a peer the socket could not name" do
@@ -83,7 +83,7 @@ Spectator.describe Invidious::ArikHeaderGate do
     end
 
     it "believes nothing when no proxy is trusted" do
-      expect(Request.asserted(trusted_proxies: [] of String)).to be_nil
+      expect(Request.asserted(trusted_proxies: Array(String).new)).to be_nil
     end
 
     it "believes nothing when the socket could not name the peer" do
@@ -123,7 +123,7 @@ Spectator.describe Invidious::ArikHeaderGate do
     end
 
     it "rejects an empty header list" do
-      expect(Request.asserted(header_values: [] of String)).to be_nil
+      expect(Request.asserted(header_values: Array(String).new)).to be_nil
     end
 
     it "trims the asserted name" do
