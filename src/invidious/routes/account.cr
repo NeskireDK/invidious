@@ -23,6 +23,8 @@ module Invidious::Routes::Account
     sid = sid.as(String)
     csrf_token = generate_response(sid, {":change_password"}, HMAC_KEY)
 
+    sso_verified = Invidious::TrustedHeaderAuth.password_self_service?(env, user)
+
     templated "user/change_password"
   end
 
@@ -48,8 +50,14 @@ module Invidious::Routes::Account
       return error_template(400, ex)
     end
 
+    # An SSO session proves the identity through the trusted header already, so
+    # the current password is waived. Accounts provisioned by SSO were given a
+    # random password the user never saw and could never type here. The waiver
+    # is off when the admin turned password_self_service off.
+    sso_verified = Invidious::TrustedHeaderAuth.password_self_service?(env, user)
+
     password = env.params.body["password"]?
-    if password.nil? || password.empty?
+    if !sso_verified && (password.nil? || password.empty?)
       return error_template(401, "Password is a required field")
     end
 
@@ -68,8 +76,10 @@ module Invidious::Routes::Account
       return error_template(400, "Password cannot be longer than 55 characters")
     end
 
-    if !Crypto::Bcrypt::Password.new(user.password.not_nil!).verify(password.byte_slice(0, 55))
-      return error_template(401, "Incorrect password")
+    if !sso_verified
+      if !Crypto::Bcrypt::Password.new(user.password.not_nil!).verify(password.not_nil!.byte_slice(0, 55))
+        return error_template(401, "Incorrect password")
+      end
     end
 
     new_password = Crypto::Bcrypt::Password.create(new_password, cost: 10)
@@ -209,11 +219,30 @@ module Invidious::Routes::Account
     scopes ||= [] of String
 
     callback_url = env.params.query["callback_url"]?
+    expire = env.params.query["expire"]?.try &.to_i?
+
+    # ArikTube: a client the admin listed, reached through a session the
+    # trusted-header proxy vouches for, is answered without the consent page.
+    # The proxy already authenticated this person for this origin, so the extra
+    # click proves nothing — but nothing was clicked, so the grant is clamped
+    # to what an allowlisted client needs and is logged as the audit line the
+    # missing consent screen would have been.
+    if callback_url && Invidious::TrustedHeaderAuth.auto_approve_token?(env, user, callback_url)
+      granted_scopes = Invidious::ArikSettings.clamp_auto_approved_scopes(scopes)
+      granted_expire = Invidious::ArikSettings.clamp_auto_approved_expire(expire)
+      access_token = generate_token(user.email, granted_scopes, granted_expire, HMAC_KEY)
+
+      origin = Invidious::ArikSettings.normalize_origin(callback_url)
+      LOGGER.info("authorize_token: auto-approved #{user.email} for #{origin}, \
+                   scopes [#{granted_scopes.join(" ")}], \
+                   expires #{Time.unix(granted_expire).to_rfc3339}")
+
+      return env.redirect self.token_callback_url(callback_url, user, access_token)
+    end
+
     if callback_url
       callback_url = URI.parse(callback_url)
     end
-
-    expire = env.params.query["expire"]?.try &.to_i?
 
     templated "user/authorize_token"
   end
@@ -247,25 +276,31 @@ module Invidious::Routes::Account
     access_token = generate_token(user.email, scopes, expire, HMAC_KEY)
 
     if callback_url
-      access_token = URI.encode_www_form(access_token)
-      url = URI.parse(callback_url)
-
-      if url.query
-        query = HTTP::Params.parse(url.query.not_nil!)
-      else
-        query = HTTP::Params.new
-      end
-
-      query["token"] = access_token
-      query["username"] = URI.encode_path_segment(user.email)
-      url.query = query.to_s
-
-      env.redirect url.to_s
+      env.redirect self.token_callback_url(callback_url, user, access_token)
     else
       csrf_token = ""
       env.set "access_token", access_token
       templated "user/authorize_token"
     end
+  end
+
+  # The client's callback URL with the granted token and the user name
+  # appended. Shared by the consent POST and the ArikTube auto-approval, so
+  # an approved client is handed exactly the same URL either way.
+  private def token_callback_url(callback_url : String, user : User, access_token : String) : String
+    url = URI.parse(callback_url)
+
+    if url.query
+      query = HTTP::Params.parse(url.query.not_nil!)
+    else
+      query = HTTP::Params.new
+    end
+
+    query["token"] = URI.encode_www_form(access_token)
+    query["username"] = URI.encode_path_segment(user.email)
+    url.query = query.to_s
+
+    url.to_s
   end
 
   # -------------------

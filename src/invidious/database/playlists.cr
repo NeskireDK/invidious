@@ -136,6 +136,20 @@ module Invidious::Database::Playlists
     PG_DB.query_all(request, email, as: InvidiousPlaylist)
   end
 
+  # Every playlist of this instance a feed may serve. Used by the ArikTube
+  # admin settings page, where the playlist-backed feeds are picked from a
+  # list. Unlisted is included: the feeds serve it, so hiding it here would
+  # only mean the plid has to be typed in by hand.
+  def select_feedable : Array(InvidiousPlaylist)
+    request = <<-SQL
+      SELECT * FROM playlists
+      WHERE privacy <> 'Private'
+      ORDER BY title
+    SQL
+
+    PG_DB.query_all(request, as: InvidiousPlaylist)
+  end
+
   def select_user_created_playlists(email : String) : Array({String, String})
     request = <<-SQL
       SELECT id,title FROM playlists

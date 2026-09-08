@@ -336,6 +336,10 @@
                     <label for="modified_source_code_url"><%= I18n.translate(locale, "adminprefs_modified_source_code_url_label") %></label>
                     <input name="modified_source_code_url" id="modified_source_code_url" type="url" value="<%= CONFIG.modified_source_code_url %>">
                 </div>
+
+                <div class="pure-control-group">
+                    <a href="/admin/settings?referer=<%= URI.encode_www_form(referer) %>"><%= I18n.translate(locale, "ariktube_settings_link") %></a>
+                </div>
             <% end %>
 
             <% if env.get? "user" %>

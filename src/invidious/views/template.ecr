@@ -33,7 +33,7 @@
             <div class="pure-g navbar h-box">
                 <% if navbar_search %>
                     <div class="pure-u-1 pure-u-md-4-24">
-                        <a href="/" class="index-link pure-menu-heading">Invidious</a>
+                        <a href="/" class="index-link pure-menu-heading"><svg viewBox="0 0 28 20" width="26" height="19" aria-hidden="true" style="vertical-align:-12%"><rect width="28" height="20" rx="5" fill="#f00"/><path d="M11.2 5.2 19 10l-7.8 4.8z" fill="#fff"/></svg> ArikTube</a>
                     </div>
                     <div class="pure-u-1 pure-u-md-12-24 searchbar">
                         <% autofocus = false %><%= rendered "components/search_box" %>
@@ -72,12 +72,21 @@
                             </div>
                         <% end %>
                         <div class="pure-u-1-4">
-                            <form action="/signout?referer=<%= env.get?("current_page") %>" method="post">
-                                <input type="hidden" name="csrf_token" value="<%= HTML.escape(env.get?("csrf_token").try &.as(String) || "") %>">
-                                <a class="pure-menu-heading" href="#">
-                                    <input style="all:unset" type="submit" value="<%= I18n.translate(locale, "Log out") %>">
-                                </a>
-                            </form>
+                            <% if CONFIG.trusted_header_auth.enabled && CONFIG.trusted_header_auth.logout_url %>
+                                <form action="/signout" method="post">
+                                    <input type="hidden" name="csrf_token" value="<%= HTML.escape(env.get?("csrf_token").try &.as(String) || "") %>">
+                                    <a class="pure-menu-heading" href="#">
+                                        <input style="all:unset" type="submit" value="<%= I18n.translate(locale, "Log out") %>">
+                                    </a>
+                                </form>
+                            <% else %>
+                                <form action="/signout?referer=<%= env.get?("current_page") %>" method="post">
+                                    <input type="hidden" name="csrf_token" value="<%= HTML.escape(env.get?("csrf_token").try &.as(String) || "") %>">
+                                    <a class="pure-menu-heading" href="#">
+                                        <input style="all:unset" type="submit" value="<%= I18n.translate(locale, "Log out") %>">
+                                    </a>
+                                </form>
+                            <% end %>
                         </div>
                     <% else %>
                         <div class="pure-u-1-3">

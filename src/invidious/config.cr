@@ -80,6 +80,29 @@ struct HTTPProxyConfig
   property port : Int32
 end
 
+# Trusted-header authentication (ArikTube extension). An authenticating
+# reverse proxy (Authelia) asserts the user name in a request header.
+struct TrustedHeaderAuthConfig
+  include YAML::Serializable
+
+  property enabled : Bool = false
+  # Request header that carries the authenticated user name
+  property header : String = "Remote-User"
+  # Literal peer IPs allowed to assert the header. The TCP peer address is
+  # compared, never X-Forwarded-For. CIDR ranges are not supported.
+  property trusted_proxies : Array(String) = [] of String
+  # Optional target for the sign-out link while header auth is active
+  property logout_url : String? = nil
+  # Let a session the proxy vouches for set a password without typing the
+  # current one. Accounts provisioned here were given a random password
+  # nobody ever saw, so this is what makes them usable from native clients.
+  property password_self_service : Bool = true
+  # Exact origins (scheme, host, optional port) whose token authorization
+  # requests skip the consent page. Only for sessions established by the
+  # trusted header; empty means every client sees the consent page.
+  property auto_approve_token_callbacks : Array(String) = [] of String
+end
+
 class Config
   include YAML::Serializable
 
@@ -132,9 +155,22 @@ class Config
   # Subscribe to channels using PubSubHubbub (requires domain, hmac_key)
   property use_pubsub_feeds : Bool | Int32 = false
   property popular_enabled : Bool = true
+  # Playlist-backed feeds (ArikTube extension): when set, the Trending or
+  # Popular feed serves these local playlists (merged in order, duplicates
+  # dropped) instead of the stock feed content. Public and Unlisted both
+  # qualify — see PlaylistPrivacy#feedable? — and both feeds are served
+  # without authentication.
+  property trending_playlists : Array(String) = [] of String
+  property popular_playlists : Array(String) = [] of String
+  # Content kinds the subscription feed admits (ArikTube extension): "video",
+  # "short", "live". Unclassified entries are always shown and an empty list
+  # admits everything, so the feed cannot end up blank.
+  property feed_kinds : Array(String) = ["video"]
   property captcha_enabled : Bool = true
   property login_enabled : Bool = true
   property registration_enabled : Bool = true
+  # Trusted-header authentication (ArikTube extension)
+  property trusted_header_auth : TrustedHeaderAuthConfig = TrustedHeaderAuthConfig.from_yaml("")
   property statistics_enabled : Bool = false
   property admins : Array(String) = [] of String
   property external_port : Int32? = nil
@@ -321,6 +357,33 @@ class Config
         )
       else
         puts "Config: Either database_url or db.* is required"
+        exit(1)
+      end
+    end
+
+    # Trusted-header auth (ArikTube extension): fail closed on misconfiguration
+    if config.trusted_header_auth.enabled
+      if config.trusted_header_auth.header.strip.empty?
+        puts "Config: trusted_header_auth.header can't be empty"
+        exit(1)
+      end
+      if config.trusted_header_auth.trusted_proxies.empty?
+        puts "Config: trusted_header_auth needs at least one trusted_proxies entry"
+        exit(1)
+      end
+      config.trusted_header_auth.trusted_proxies.each do |address|
+        if address.includes?('/') || !Socket::IPAddress.valid?(address)
+          puts "Config: trusted_header_auth.trusted_proxies takes literal IP addresses only (got '#{address}')"
+          exit(1)
+        end
+      end
+    end
+
+    # The auto-approval list waives a consent screen, so a typo in it is
+    # refused loudly instead of silently never matching.
+    config.trusted_header_auth.auto_approve_token_callbacks.each do |origin|
+      if error = Invidious::ArikSettings.origin_error(origin)
+        puts "Config: trusted_header_auth.auto_approve_token_callbacks: #{error}"
         exit(1)
       end
     end

@@ -79,6 +79,10 @@ module Invidious::Routing
     post "/token_ajax", Routes::Account, :token_ajax
     post "/subscription_ajax", Routes::Subscriptions, :toggle_subscription
     get "/subscription_manager", Routes::Subscriptions, :subscription_manager
+
+    # ArikTube settings, stored in the database (admins only)
+    get "/admin/settings", Routes::AdminSettings, :show
+    post "/admin/settings", Routes::AdminSettings, :update
   end
 
   def register_iv_playlist_routes

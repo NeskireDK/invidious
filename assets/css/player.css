@@ -156,7 +156,7 @@ ul.vjs-menu-content::-webkit-scrollbar {
 .vjs-menu li.vjs-selected,
 .vjs-menu li.vjs-selected:focus,
 .vjs-menu li.vjs-selected:hover {
-  background-color: rgba(0, 182, 240, 0.75);
+  background-color: rgba(204, 0, 0, 0.75);
 }
 
 /* Progress Bar */
@@ -171,11 +171,11 @@ ul.vjs-menu-content::-webkit-scrollbar {
 
 .video-js .vjs-slider:hover,
 .video-js button:hover {
-  color: rgba(0, 182, 240, 1);
+  color: rgba(255, 82, 82, 1);
 }
 
 .video-js.player-style-invidious .vjs-play-progress {
-  background-color: rgba(0, 182, 240, 1);
+  background-color: rgba(255, 0, 0, 1);
 }
 
 /* Overlay */

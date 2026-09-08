@@ -20,6 +20,10 @@ module Invidious::Database
     Invidious::Database.check_table("users", User)
     Invidious::Database.check_table("videos", Video)
 
+    # ArikTube: settings the admin edits at runtime. No struct is passed on
+    # purpose — the table is key/value and must not be reshaped from a struct.
+    Invidious::Database.check_table("arik_settings")
+
     if cfg.cache_annotations
       Invidious::Database.check_table("annotations", Annotation)
     end

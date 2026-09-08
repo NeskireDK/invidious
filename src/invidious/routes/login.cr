@@ -126,7 +126,7 @@ module Invidious::Routes::Login
         Invidious::Database::SessionIDs.insert(sid, email)
 
         view_name = "subscriptions_#{sha256(user.email)}"
-        PG_DB.exec("CREATE MATERIALIZED VIEW #{view_name} AS #{MATERIALIZED_VIEW_SQL.call(user.email)}")
+        create_subscription_view(PG_DB, view_name, user.email)
 
         if alt = CONFIG.alternative_domains.index(host)
           env.response.cookies["SID"] = Invidious::User::Cookies.sid(CONFIG.alternative_domains[alt], sid)
@@ -176,6 +176,12 @@ module Invidious::Routes::Login
     env.request.cookies.each do |cookie|
       cookie.expires = Time.utc(1990, 1, 1)
       env.response.cookies << cookie
+    end
+
+    # ArikTube: end the proxy's session too, or the next request re-asserts the
+    # identity and ensure_session mints a replacement immediately.
+    if CONFIG.trusted_header_auth.enabled && (logout_url = CONFIG.trusted_header_auth.logout_url)
+      return env.redirect logout_url
     end
 
     env.redirect referer

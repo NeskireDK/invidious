@@ -1,7 +1,19 @@
 require "crypto/bcrypt/password"
 
 # Materialized views may not be defined using bound parameters (`$1` as used elsewhere)
-MATERIALIZED_VIEW_SQL = ->(email : String) { "SELECT cv.* FROM channel_videos cv WHERE EXISTS (SELECT subscriptions FROM users u WHERE cv.ucid = ANY (u.subscriptions) AND u.email = E'#{email.gsub({'\'' => "\\'", '\\' => "\\\\"})}') ORDER BY published DESC" }
+# ArikTube: the trailing `view_predicate` restricts the feed to the configured
+# content kinds. Baked in at CREATE time, so ClassifyChannelVideosJob rebuilds
+# every view when the setting changes.
+MATERIALIZED_VIEW_SQL = ->(email : String) { "SELECT cv.* FROM channel_videos cv WHERE EXISTS (SELECT subscriptions FROM users u WHERE cv.ucid = ANY (u.subscriptions) AND u.email = E'#{email.gsub({'\'' => "\\'", '\\' => "\\\\"})}')#{Invidious::ArikFeedKinds.view_predicate(CONFIG.feed_kinds, "cv.kind")} ORDER BY published DESC" }
+
+# Creates a subscriptions view, stamped with the feed kinds its predicate
+# admits. The stamp goes on the view object itself, so a view nobody rebuilt
+# cannot report itself current — which is why every creation site goes through
+# here rather than issuing its own CREATE.
+def create_subscription_view(db, view_name : String, email : String) : Nil
+  db.exec("CREATE MATERIALIZED VIEW #{view_name} AS #{MATERIALIZED_VIEW_SQL.call(email)}")
+  db.exec("COMMENT ON MATERIALIZED VIEW #{view_name} IS '#{Invidious::ArikFeedKinds.view_marker(CONFIG.feed_kinds)}'")
+end
 
 def create_user(sid, email, password)
   password = Crypto::Bcrypt::Password.create(password, cost: 10)

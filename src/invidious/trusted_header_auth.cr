@@ -1,0 +1,110 @@
+# Trusted-header authentication (ArikTube extension).
+#
+# An authenticating reverse proxy (Authelia behind Traefik) asserts the user
+# name in a request header. The header is only honored when the TCP peer is
+# listed in `trusted_proxies` — never based on X-Forwarded-For. The account
+# is provisioned on first sight, so a browser with a proxy session never
+# sees the Invidious login form.
+#
+# The reverse proxy MUST strip the configured header from client requests on
+# every route that bypasses its authentication, or clients can impersonate
+# users through those routes.
+module Invidious::TrustedHeaderAuth
+  extend self
+
+  # The user name asserted by the proxy, or nil when absent or untrusted.
+  # The decision itself is ArikHeaderGate's; this reads the request for it.
+  def asserted_email(env) : String?
+    config = CONFIG.trusted_header_auth
+
+    ArikHeaderGate.asserted_email(
+      config.enabled,
+      env.request.path,
+      env.request.headers.get?(config.header),
+      config.trusted_proxies,
+      env.request.remote_address.as?(Socket::IPAddress).try(&.address)
+    )
+  end
+
+  # Whether a token authorization request may skip the consent page.
+  #
+  # Only for a session the proxy vouches for, and only when the callback
+  # lands on an origin the admin listed. The token still goes to that origin
+  # and nowhere else, so an attacker who talks the browser into this route
+  # hands the token to the admin's own client, not to themselves.
+  def auto_approve_token?(env, user, callback_url : String?) : Bool
+    config = CONFIG.trusted_header_auth
+
+    Invidious::ArikSettings.auto_approve_token?(
+      config.enabled,
+      config.auto_approve_token_callbacks,
+      asserted_email(env),
+      user.email,
+      callback_url
+    )
+  end
+
+  # Whether `user` may change their password without typing the current one.
+  #
+  # The header has to assert this very user on this very request, so a
+  # password-login session never qualifies. The admin can switch the waiver
+  # off with trusted_header_auth.password_self_service.
+  def password_self_service?(env, user) : Bool
+    Invidious::ArikSettings.password_self_service?(
+      CONFIG.trusted_header_auth.password_self_service,
+      asserted_email(env),
+      user.email
+    )
+  end
+
+  # Return a session id for `email`. Reuses `sid` when that session already
+  # belongs to the user; otherwise provisions account + session and sets the
+  # SID cookie, mirroring the manual login flow (routes/login.cr).
+  def ensure_session(env, sid : String?, email : String) : String
+    if sid
+      session_email = Invidious::Database::SessionIDs.select_email(sid)
+      return sid if session_email == email
+      # Identity switch: the cookie belongs to somebody else. Drop it.
+      Invidious::Database::SessionIDs.delete(sid: sid) if session_email
+    end
+
+    if !Invidious::Database::Users.select(email: email)
+      provision_user(email)
+    end
+
+    new_sid = Base64.urlsafe_encode(Random::Secure.random_bytes(32))
+    Invidious::Database::SessionIDs.insert(new_sid, email, handle_conflicts: true)
+
+    host = env.get("header_x-forwarded-host")
+    if alt = CONFIG.alternative_domains.index(host)
+      env.response.cookies["SID"] = Invidious::User::Cookies.sid(CONFIG.alternative_domains[alt], new_sid)
+    else
+      env.response.cookies["SID"] = Invidious::User::Cookies.sid(CONFIG.domain, new_sid)
+    end
+
+    new_sid
+  end
+
+  # Same steps as manual registration (routes/login.cr), with a random
+  # password nobody knows. The materialized view is required — without it
+  # the subscriptions feed raises. Both steps tolerate a concurrent provision
+  # of the same user (parallel first-page requests).
+  #
+  # No `IF NOT EXISTS` on the view: that would stamp an already existing view
+  # with the current feed kinds without having rebuilt it. A view this call
+  # could not create is left for ClassifyChannelVideosJob, which checks every
+  # view's own marker and rebuilds what disagrees.
+  private def provision_user(email : String)
+    random_password = Base64.urlsafe_encode(Random::Secure.random_bytes(32))
+    user, _ = create_user("", email, random_password)
+
+    Invidious::Database::Users.insert(user, update_on_conflict: true)
+
+    view_name = "subscriptions_#{sha256(user.email)}"
+    begin
+      create_subscription_view(PG_DB, view_name, user.email)
+    rescue ex
+      LOGGER.debug("TrustedHeaderAuth: cannot create #{view_name} (#{ex.message})")
+    end
+  end
+end

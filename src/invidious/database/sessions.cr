@@ -49,6 +49,16 @@ module Invidious::Database::SessionIDs
     PG_DB.exec(request, sid, email)
   end
 
+  # Sessions issued before `issued_before`, and the number removed.
+  def delete_expired(issued_before : Time) : Int64
+    request = <<-SQL
+      DELETE FROM session_ids *
+      WHERE issued < $1
+    SQL
+
+    PG_DB.exec(request, issued_before).rows_affected
+  end
+
   # -------------------
   #  Select
   # -------------------

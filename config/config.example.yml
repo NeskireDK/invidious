@@ -371,6 +371,96 @@ https_only: false
 #login_enabled: true
 
 ##
+## Trusted-header authentication (ArikTube extension).
+##
+## An authenticating reverse proxy (for example Authelia) asserts the
+## user name in a request header. The header is only honored when the
+## direct TCP peer is listed in trusted_proxies (literal IP addresses,
+## no CIDR ranges). Accounts are created on first sight. /api/ routes
+## are excluded — API clients keep using tokens.
+##
+## WARNING: the reverse proxy MUST strip this header from client
+## requests on every route that bypasses its authentication.
+##
+## password_self_service lets such a session set a password without
+## typing the current one — those accounts were given a random password
+## nobody ever saw. Set it to false to require the current password.
+##
+## auto_approve_token_callbacks lists exact origins (scheme, host and
+## optional port, nothing else) whose token authorization requests skip
+## the consent page, so a client behind the same proxy signs in without
+## a click. Only sessions established by the trusted header qualify, and
+## the callback origin must match an entry whole. Empty = every client
+## sees the consent page. A grant made this way is clamped: the feed,
+## subscriptions, playlists, history and notifications scopes only, and
+## an expiry of at most a year whatever the request asked for. Each one
+## is logged.
+##
+## Default: disabled
+##
+#trusted_header_auth:
+#  enabled: true
+#  header: Remote-User
+#  trusted_proxies:
+#    - 192.168.1.101
+#  logout_url: "https://auth.example.com/logout"
+#  password_self_service: true
+#  auto_approve_token_callbacks:
+#    - "https://yt.example.com"
+
+##
+## Playlist-backed feeds (ArikTube extension).
+##
+## When set, the Trending and/or Popular feed serves the content of these
+## local playlists instead of the stock feed. Playlists merge in the
+## listed order, each in its own order, duplicates dropped. The swap is
+## at the data layer, so /api/v1/trending and /api/v1/popular serve the
+## same items — API clients need no changes. Missing playlists, and ones
+## whose privacy is Private, are skipped and logged. Trending category
+## tabs and region are ignored while a list is set.
+##
+## Public and Unlisted playlists both back a feed: naming the plid here
+## is the operator publishing it. Note what that means for an Unlisted
+## playlist — /api/v1/trending and /api/v1/popular are unauthenticated,
+## so its contents become readable by anyone who can reach the instance,
+## without the ID.
+##
+## Default: [] (stock feeds)
+##
+#trending_playlists:
+#  - IVPLxxxxxxxxxxxxxxxxxxxx
+#popular_playlists:
+#  - IVPLxxxxxxxxxxxxxxxxxxxx
+
+##
+## Subscription feed content kinds (ArikTube extension).
+##
+## Which kinds of upload the subscription feed shows. YouTube publishes a
+## per-channel uploads playlist per kind (UULF long-form, UUSH Shorts,
+## UULV live), so ClassifyChannelVideosJob labels each row from YouTube's
+## own classification rather than guessing from the length — a 27-second
+## clip and a 5-hour stream VOD both reach channel_videos with
+## length_seconds = 0.
+##
+## An entry the classifier has not reached yet is ALWAYS shown, and an
+## empty list admits everything. Neither a late job nor a bad value can
+## blank the feed.
+##
+## Accepted values: any of video, short, live
+## Default: ["video"]
+##
+#feed_kinds:
+#  - video
+
+##
+## NOTE: the settings above and trusted_header_auth can also be
+## edited at runtime, on the ArikTube settings page an administrator
+## reaches from /preferences. Those edits are stored in the database
+## (table arik_settings) and override what is written here, because a
+## config passed through INVIDIOUS_CONFIG can't be written back.
+##
+
+##
 ## Enable/Disable the captcha challenge on the login page.
 ##
 ## Note: this is a basic captcha challenge that doesn't
