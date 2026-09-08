@@ -1,8 +1,7 @@
 name: Invidious CI
 
 on:
-  schedule:
-    - cron: "0 0 * * *" # Every day at 00:00
+  # No schedule: a nightly here only re-ran upstream code that already fails upstream.
   push:
     branches:
       - "master"
