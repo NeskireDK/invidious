@@ -51,9 +51,16 @@ end
 # This is used as the resource for the `CompanionPool` as to allow the ability to
 # proxy the requests to Invidious companion from Invidious directly.
 # Instead of setting up routes in a reverse proxy.
-struct CompanionWrapper
+#
+# A class, not a struct: `DB::Pool` looks its resources up by identity, so a
+# mutation on a pooled copy would not be visible to the pool.
+class CompanionWrapper
   property client : HTTP::Client
   property companion : Config::CompanionConfig
+
+  # `DB::Pool#release` discards a resource that reports itself closed instead of
+  # returning it to the idle set. `HTTP::Client` has no such predicate.
+  getter? closed : Bool = false
 
   def initialize(companion : Config::CompanionConfig)
     @companion = companion
@@ -61,6 +68,7 @@ struct CompanionWrapper
   end
 
   def close
+    @closed = true
     @client.close
   end
 end
@@ -77,12 +85,18 @@ struct CompanionConnectionPool
     )
 
     @pool = DB::Pool(CompanionWrapper).new(options) do
-      companion = CONFIG.invidious_companion.sample
-      make_client(companion.private_url, use_http_proxy: false)
-      CompanionWrapper.new(companion: companion)
+      CompanionWrapper.new(companion: CONFIG.invidious_companion.sample)
     end
   end
 
+  # Checks out a companion connection, and never returns a poisoned one to the pool.
+  #
+  # A failed request can leave an unread response on the socket -- an aborted
+  # player seek, or a read timeout while companion is still fetching from
+  # YouTube. Crystal closes such a body without draining it (`IO::Sized#close`
+  # does not skip to the end) and keeps the connection alive, so the next
+  # request on that socket reads the *previous* response. DASH playback then
+  # dies while every healthcheck on the instance stays green.
   def client(&)
     wrapper = pool.checkout
 
@@ -90,17 +104,23 @@ struct CompanionConnectionPool
       response = yield wrapper
     rescue ex
       wrapper.close
-
-      companion = CONFIG.invidious_companion.sample
-      make_client(companion.private_url, use_http_proxy: false)
-      wrapper = CompanionWrapper.new(companion: companion)
-
-      response = yield wrapper
+      response = yield_on_fresh_companion { |retry_wrapper| yield retry_wrapper }
     ensure
       pool.release(wrapper)
     end
 
     response
+  end
+
+  # Retries on a single-use connection, so a second failure cannot poison the pool either.
+  private def yield_on_fresh_companion(&)
+    retry_wrapper = CompanionWrapper.new(companion: CONFIG.invidious_companion.sample)
+
+    begin
+      yield retry_wrapper
+    ensure
+      retry_wrapper.close
+    end
   end
 end
 
