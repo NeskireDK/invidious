@@ -1,5 +1,7 @@
 require "../spec_helper"
+require "../parsers_helper"
 require "socket"
+require "../../src/invidious/yt_backend/socks_proxy"
 require "../../src/invidious/yt_backend/connection_pool"
 
 # A keep-alive HTTP server that can answer late, so a spec can walk away from a
@@ -138,24 +140,39 @@ Spectator.describe CompanionConnectionPool do
     expect(get(pool, "/healthz")).to eq("ok")
   end
 
-  it "drops the connection it walked away from instead of pooling it" do
+  # Replacing the connection rather than discarding it keeps the pool's own
+  # bookkeeping straight. Discarding takes a `DB::Pool#release` branch that drops
+  # the resource without waking anybody queued on the availability channel, so a
+  # fiber waiting on a saturated pool sits out the whole checkout timeout.
+  it "keeps its slot in the pool after a request fails" do
     companion = MockCompanion.new
     pool = pool_for(companion)
 
     expect { walk_away_from_a_late_reply(pool) }.to raise_error(IO::TimeoutError)
     let_the_late_reply_land
 
-    expect(pool.pool.stats.open_connections).to eq(0)
-    expect(pool.pool.stats.idle_connections).to eq(0)
+    expect(pool.pool.stats.open_connections).to eq(1)
+    expect(pool.pool.stats.idle_connections).to eq(1)
   end
 
-  it "drops a connection whose response body was abandoned part-way" do
+  it "serves the next request on a new connection, not the one it walked away from" do
+    companion = MockCompanion.new
+    pool = pool_for(companion)
+
+    expect { walk_away_from_a_late_reply(pool) }.to raise_error(IO::TimeoutError)
+    let_the_late_reply_land
+    connections_before = companion.connections_accepted
+
+    expect(get(pool, "/healthz")).to eq("ok")
+    expect(companion.connections_accepted).to eq(connections_before + 1)
+  end
+
+  it "still answers correctly after a response body was abandoned part-way" do
     companion = MockCompanion.new
     pool = pool_for(companion)
 
     expect { abort_mid_response(pool) }.to raise_error(/the player went away/)
 
-    expect(pool.pool.stats.open_connections).to eq(0)
-    expect(pool.pool.stats.idle_connections).to eq(0)
+    expect(get(pool, "/healthz")).to eq("ok")
   end
 end
