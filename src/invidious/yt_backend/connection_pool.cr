@@ -51,13 +51,23 @@ end
 # This is used as the resource for the `CompanionPool` as to allow the ability to
 # proxy the requests to Invidious companion from Invidious directly.
 # Instead of setting up routes in a reverse proxy.
-struct CompanionWrapper
+#
+# A class, not a struct: the pool looks its resources up by identity, so a
+# reconnect on a copy would leave the pool holding the old connection.
+class CompanionWrapper
   property client : HTTP::Client
   property companion : Config::CompanionConfig
 
   def initialize(companion : Config::CompanionConfig)
     @companion = companion
     @client = make_client(companion.private_url, use_http_proxy: false)
+  end
+
+  # Trades this connection for a new one, to a freshly picked companion.
+  def reconnect
+    @client.close
+    @companion = CONFIG.invidious_companion.sample
+    @client = make_client(@companion.private_url, use_http_proxy: false)
   end
 
   def close
@@ -77,30 +87,38 @@ struct CompanionConnectionPool
     )
 
     @pool = DB::Pool(CompanionWrapper).new(options) do
-      companion = CONFIG.invidious_companion.sample
-      make_client(companion.private_url, use_http_proxy: false)
-      CompanionWrapper.new(companion: companion)
+      CompanionWrapper.new(companion: CONFIG.invidious_companion.sample)
     end
   end
 
+  # Checks out a companion connection, and never leaves a poisoned one in the pool.
+  #
+  # `IO::Sized#close` does not drain, so a response that was not read to the end
+  # stays queued on a keep-alive socket and the next request reads that instead.
   def client(&)
     wrapper = pool.checkout
 
     begin
       response = yield wrapper
     rescue ex
-      wrapper.close
-
-      companion = CONFIG.invidious_companion.sample
-      make_client(companion.private_url, use_http_proxy: false)
-      wrapper = CompanionWrapper.new(companion: companion)
-
-      response = yield wrapper
+      wrapper.reconnect
+      response = yield_on_a_single_use_connection { |retry_wrapper| yield retry_wrapper }
     ensure
       pool.release(wrapper)
     end
 
     response
+  end
+
+  # Retries off the pool entirely, so a second failure cannot poison it either.
+  private def yield_on_a_single_use_connection(&)
+    retry_wrapper = CompanionWrapper.new(companion: CONFIG.invidious_companion.sample)
+
+    begin
+      yield retry_wrapper
+    ensure
+      retry_wrapper.close
+    end
   end
 end
 
