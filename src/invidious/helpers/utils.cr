@@ -102,7 +102,7 @@ def decode_date(string : String)
   # Try to parse as format Jul 10, 2000
   begin
     return Time.parse(string, "%b %-d, %Y", Time::Location.local)
-  rescue ex
+  rescue
   end
 
   case string
@@ -110,7 +110,6 @@ def decode_date(string : String)
     return Time.utc
   when "yesterday"
     return Time.utc - 1.day
-  else nil # Continue
   end
 
   # String matches format "20 hours ago", "4 months ago", "20s ago", "15min ago"...
@@ -177,7 +176,7 @@ def short_text_to_number(short_text : String) : Int64
   end
 
   return number.to_i64
-rescue ex
+rescue
   return 0_i64
 end
 
@@ -403,4 +402,11 @@ def invidious_companion_encrypt(data)
   timestamp = Time.utc.to_unix
   encrypted_data = encrypt_ecb_without_salt("#{timestamp}|#{data}", CONFIG.invidious_companion_key)
   return Base64.urlsafe_encode(encrypted_data)
+end
+
+def validate_video_id(id : String) : Bool
+  # This is the video ID regex. May be need to be changed
+  # if Youtube ever decides to add more characters to their
+  # video IDs.
+  /\A[a-zA-Z0-9_-]{11}\z/.matches?(id)
 end

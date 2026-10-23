@@ -18,14 +18,8 @@ module Invidious::Routes::Watch
         return error_template(400, "Invalid parameters.")
       end
 
-      if id.size > 11
-        url = "/watch?v=#{id[0, 11]}"
-        env.params.query.delete_all("v")
-        if env.params.query.size > 0
-          url += "&#{env.params.query}"
-        end
-
-        return env.redirect url
+      unless validate_video_id(id)
+        return error_template(400, InvalidVideoID.new(id))
       end
     else
       return env.redirect "/"
@@ -88,7 +82,7 @@ module Invidious::Routes::Watch
         if source == "youtube"
           begin
             comment_html = JSON.parse(Comments.fetch_youtube(id, nil, "html", locale, preferences.thin_mode, region))["contentHtml"]
-          rescue ex
+          rescue
             if preferences.comments[1] == "reddit"
               comments, reddit_thread = Comments.fetch_reddit(id)
               comment_html = Frontend::Comments.template_reddit(comments, locale)
@@ -104,7 +98,7 @@ module Invidious::Routes::Watch
 
             comment_html = Comments.fill_links(comment_html, "https", "www.reddit.com")
             comment_html = Comments.replace_links(comment_html)
-          rescue ex
+          rescue
             if preferences.comments[1] == "youtube"
               comment_html = JSON.parse(Comments.fetch_youtube(id, nil, "html", locale, preferences.thin_mode, region))["contentHtml"]
             end
@@ -149,14 +143,14 @@ module Invidious::Routes::Watch
 
     captions = video.captions
 
-    preferred_captions = captions.select { |caption|
+    preferred_captions = captions.select do |caption|
       params.preferred_captions.includes?(caption.name) ||
         params.preferred_captions.includes?(caption.language_code.split("-")[0])
-    }
-    preferred_captions.sort_by! { |caption|
+    end
+    preferred_captions.sort_by! do |caption|
       (params.preferred_captions.index(caption.name) ||
         params.preferred_captions.index(caption.language_code.split("-")[0])).not_nil!
-    }
+    end
     captions = captions - preferred_captions
 
     aspect_ratio = "16:9"
@@ -235,7 +229,7 @@ module Invidious::Routes::Watch
     token = env.params.body["csrf_token"]?
 
     id = env.params.query["id"]?
-    if !id
+    unless id && validate_video_id(id)
       env.response.status_code = 400
       return
     end
