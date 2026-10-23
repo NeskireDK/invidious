@@ -1,5 +1,5 @@
 name: invidious
-version: 2.20260804.1-dev
+version: 2.20261022.0
 
 authors:
   - Invidious team <contact@invidious.io>
@@ -8,9 +8,11 @@ authors:
 targets:
   invidious:
     main: src/invidious.cr
+  ameba:
+    main: lib/ameba/bin/ameba.cr
 
 description: |
-   Invidious is an alternative front-end to YouTube 
+   Invidious is an alternative front-end to YouTube
 
 dependencies:
   pg:
@@ -35,12 +37,12 @@ dependencies:
 development_dependencies:
   spectator:
     github: icy-arctic-fox/spectator
-    version: ~> 0.10.4
+    version: ~> 0.12.4
   ameba:
     github: crystal-ameba/ameba
-    version: ~> 1.6.1
+    version: ~> 1.7.0
 
-crystal: ">= 1.10.0, < 2.0.0"
+crystal: ">= 1.14.1, < 2.0.0"
 
 license: AGPL-3.0-only
 

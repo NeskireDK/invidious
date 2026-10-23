@@ -97,7 +97,7 @@ struct ChannelVideo
   def to_tuple
     {% begin %}
       {
-        {{@type.instance_vars.map(&.name).splat}}
+        {{ @type.instance_vars.map(&.name).splat }}
       }
     {% end %}
   end
@@ -111,7 +111,7 @@ class ChannelRedirect < Exception
 end
 
 def get_batch_channels(channels)
-  finished_channel = Channel(String | Nil).new
+  finished_channel = Channel(String?).new
   max_threads = 10
 
   spawn do
@@ -129,7 +129,7 @@ def get_batch_channels(channels)
         begin
           get_channel(ucid)
           finished_channel.send(ucid)
-        rescue ex
+        rescue
           finished_channel.send(nil)
         ensure
           active_channel.send(nil)

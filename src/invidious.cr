@@ -50,6 +50,27 @@ require "./invidious/routes/**"
 require "./invidious/jobs/base_job"
 require "./invidious/jobs/*"
 
+# Show a nice message in case the current Crystal compiler version is unsupoported```
+# encouraging the user compiling Invidious to update it```
+# version.
+{% begin %}
+  # `-Dskip_version_check` compile-time flag, for development purposes
+  # or weird installations that lack the `shard.yml` file when compiling
+  # Invidious.
+  {% if !flag?(:skip_version_check) %}
+    {% if file_exists?("#{__DIR__}/../shard.yml") %}
+      {% shard_yml = read_file("#{__DIR__}/../shard.yml") %}
+      {% crystal_constraint = shard_yml.split('\n').find(&.starts_with?("crystal:")) %}
+      {% minimum_version = crystal_constraint.split('"')[1].split(",").first.split(">=").last.strip %}
+      {% if compare_versions(Crystal::VERSION, minimum_version) < 0 %}
+        {{ raise "Crystal version #{minimum_version} or newer is required to build Invidious. \
+          You currently have Crystal version #{Crystal::VERSION} installed. \
+          We recommend that you install it following the way that the team behind the Crystal compiler itself recommend for your OS, see: https://crystal-lang.org/install/" }}
+      {% end %}
+    {% end %}
+  {% end %}
+{% end %}
+
 # Declare the base namespace for invidious
 module Invidious
 end
@@ -102,7 +123,7 @@ Kemal.config.extra_options do |parser|
   parser.on("-c THREADS", "--channel-threads=THREADS", "Number of threads for refreshing channels (default: #{CONFIG.channel_threads})") do |number|
     begin
       CONFIG.channel_threads = number.to_i
-    rescue ex
+    rescue
       puts "THREADS must be integer"
       exit
     end
@@ -110,7 +131,7 @@ Kemal.config.extra_options do |parser|
   parser.on("-f THREADS", "--feed-threads=THREADS", "Number of threads for refreshing feeds (default: #{CONFIG.feed_threads})") do |number|
     begin
       CONFIG.feed_threads = number.to_i
-    rescue ex
+    rescue
       puts "THREADS must be integer"
       exit
     end

@@ -15,7 +15,7 @@ module Invidious::Routes::Images
       GGPHT_POOL.client &.get(url, headers) do |resp|
         return self.proxy_image(env, resp)
       end
-    rescue ex
+    rescue
     end
   end
 
@@ -46,7 +46,7 @@ module Invidious::Routes::Images
         env.response.headers["Connection"] = "close"
         return self.proxy_image(env, resp)
       end
-    rescue ex
+    rescue
     end
   end
 
@@ -68,7 +68,7 @@ module Invidious::Routes::Images
       get_ytimg_pool(authority).client &.get(url, headers) do |resp|
         return self.proxy_image(env, resp)
       end
-    rescue ex
+    rescue
     end
   end
 
@@ -108,7 +108,7 @@ module Invidious::Routes::Images
 
         Helpers.proxy_file(response, env)
       end
-    rescue ex
+    rescue
     end
   end
 
@@ -140,7 +140,7 @@ module Invidious::Routes::Images
       get_ytimg_pool("i").client &.get(url, headers) do |resp|
         return self.proxy_image(env, resp)
       end
-    rescue ex
+    rescue
     end
   end
 
@@ -153,10 +153,6 @@ module Invidious::Routes::Images
     end
 
     env.response.headers["Access-Control-Allow-Origin"] = "*"
-
-    if response.status_code >= 300
-      return env.response.headers.delete("Transfer-Encoding")
-    end
 
     return Helpers.proxy_file(response, env)
   end

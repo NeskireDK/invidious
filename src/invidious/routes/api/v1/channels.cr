@@ -31,11 +31,10 @@ module Invidious::Routes::API::V1::Channels
       begin
         playlist = get_playlist(channel.ucid.sub("UC", "UULF"))
         videos = get_playlist_videos(playlist, offset: 0)
-      rescue ex : InfoException
+      rescue InfoException
         # playlist doesnt exist.
         videos = [] of PlaylistVideo
       end
-      next_continuation = nil
     else
       begin
         videos, _ = Channel::Tabs.get_videos(channel, sort_by: sort_by)
@@ -119,7 +118,7 @@ module Invidious::Routes::API::V1::Channels
             # Fetch related channels
             begin
               related_channels, _ = fetch_related_channels(channel)
-            rescue ex
+            rescue
               related_channels = [] of SearchChannel
             end
 
@@ -158,7 +157,7 @@ module Invidious::Routes::API::V1::Channels
       begin
         playlist = get_playlist(channel.ucid.sub("UC", "UULF"))
         videos = get_playlist_videos(playlist, offset: 0)
-      rescue ex : InfoException
+      rescue InfoException
         # playlist doesnt exist.
         videos = [] of PlaylistVideo
       end
@@ -204,7 +203,7 @@ module Invidious::Routes::API::V1::Channels
       begin
         playlist = get_playlist(channel.ucid.sub("UC", "UUSH"))
         videos = get_playlist_videos(playlist, offset: 0)
-      rescue ex : InfoException
+      rescue InfoException
         # playlist doesnt exist.
         videos = [] of PlaylistVideo
       end
@@ -250,7 +249,7 @@ module Invidious::Routes::API::V1::Channels
       begin
         playlist = get_playlist(channel.ucid.sub("UC", "UULV"))
         videos = get_playlist_videos(playlist, offset: 0)
-      rescue ex : InfoException
+      rescue InfoException
         # playlist doesnt exist.
         videos = [] of PlaylistVideo
       end

@@ -19,9 +19,9 @@ module Invidious::Routes::API::Manifest
 
     begin
       video = get_video(id, region: region)
-    rescue ex : NotFoundException
+    rescue NotFoundException
       haltf env, status_code: 404
-    rescue ex
+    rescue
       haltf env, status_code: 403
     end
 
@@ -81,7 +81,6 @@ module Invidious::Routes::API::Manifest
               xml.element("AdaptationSet", id: i, mimeType: mime_type, startWithSAP: 1, subsegmentAlignment: true, label: "#{displayname} [#{bitrate}k]", lang: lang) do
                 codecs = fmt["mimeType"].as_s.split("codecs=")[1].strip('"')
                 bandwidth = fmt["bitrate"].as_i
-                itag = fmt["itag"].as_i
                 url = fmt["url"].as_s
 
                 xml.element("Role", schemeIdUri: "urn:mpeg:dash:role:2011", value: is_default ? "main" : "alternate")
