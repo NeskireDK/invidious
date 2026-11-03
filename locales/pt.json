@@ -138,12 +138,10 @@
     "Incorrect password": "Palavra-passe incorreta",
     "Show replies": "Mostrar respostas",
     "Hide replies": "Ocultar respostas",
-    "View Reddit comments": "Ver comentários do Reddit",
     "View `x` comments": {
         "": "Ver `x` comentários",
         "([^.,0-9]|^)1([^.,0-9]|$)": "Ver `x` comentário"
     },
-    "View more comments on Reddit": "Ver mais comentários no Reddit",
     "View YouTube comments": "Ver comentários do YouTube",
     "Premieres `x`": "Estreia `x`",
     "Premieres in `x`": "Estreia a `x`",
@@ -221,7 +219,6 @@
     "preferences_related_videos_label": "Mostrar vídeos relacionados: ",
     "Fallback captions: ": "Legendas alternativas: ",
     "preferences_captions_label": "Legendas padrão: ",
-    "reddit": "Reddit",
     "youtube": "YouTube",
     "preferences_comments_label": "Comentários padrão: ",
     "preferences_volume_label": "Volume de reprodução: ",
@@ -383,7 +380,6 @@
     "preferences_region_label": "País do conteúdo: ",
     "preferences_quality_dash_label": "Qualidade de vídeo DASH preferida: ",
     "preferences_quality_option_small": "Baixa",
-    "preferences_quality_option_hd720": "HD720",
     "preferences_quality_dash_option_auto": "Automática",
     "preferences_quality_dash_option_best": "Melhor",
     "preferences_quality_dash_option_4320p": "4320p",
@@ -525,5 +521,8 @@
     "timeline_parse_error_show_technical_details": "Mostrar detalhes técnicos",
     "dmca_content": "Este vídeo não pode ser descarregado nesta instância devido a uma notificação de violação de direitos de autor/DMCA enviada ao administrador da instância.",
     "preferences_search_privacy_label": "Privacidade da pesquisa: ",
-    "preferences_search_privacy_description": "Se ativar esta preferência, as suas pesquisas não serão guardadas no histórico."
+    "preferences_search_privacy_description": "Se ativar esta preferência, as suas pesquisas não serão guardadas no histórico.",
+    "comments_youtube_disabled_text": "Neste vídeo, os comentários estão desativados.",
+    "comments_youtube_disabled_try_reddit": "Procurar comentários no Reddit?",
+    "comments_invidious_disabled_text": "Os comentários estão ocultos, como especificado nas definições"
 }

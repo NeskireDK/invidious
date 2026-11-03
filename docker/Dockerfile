@@ -2,7 +2,7 @@
 ARG OPENSSL_VERSION='3.6.5'
 ARG OPENSSL_SHA256='a2157c2830efdec3788939b00c9b0638306d3f0bbb76dc4832ee503bb397df98'
 
-FROM 84codes/crystal:1.22.0-alpine AS dependabot-crystal
+FROM 84codes/crystal:1.22.2-alpine AS dependabot-crystal
 
 # We compile openssl ourselves due to a memory leak in how crystal interacts
 # with openssl
@@ -42,7 +42,7 @@ COPY ./scripts/ ./scripts/
 COPY ./assets/ ./assets/
 COPY ./videojs-dependencies.yml ./videojs-dependencies.yml
 
-RUN crystal spec --warnings all \
+RUN crystal spec -v --warnings all \
     --link-flags "-lxml2 -llzma"
 
 ARG OPENSSL_VERSION

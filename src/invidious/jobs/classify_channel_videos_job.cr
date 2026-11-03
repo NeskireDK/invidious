@@ -351,7 +351,7 @@ class Invidious::Jobs::ClassifyChannelVideosJob < Invidious::Jobs::BaseJob
 
       begin
         PG_DB.exec("DROP MATERIALIZED VIEW IF EXISTS #{staging}")
-        create_subscription_view(PG_DB, staging, email)
+        Invidious::User::Users.create_subscription_view(PG_DB, staging, email)
 
         PG_DB.transaction do |tx|
           tx.connection.exec("DROP MATERIALIZED VIEW IF EXISTS #{view}")

@@ -22,11 +22,11 @@ module Invidious::Routes::AdminSettings
 
     user = user.as(User)
     if !CONFIG.admins.includes?(user.email)
-      return error_template(403, "Administrator privileges are required to open this page")
+      return Errors.error_template(403, "Administrator privileges are required to open this page")
     end
 
     sid = env.get("sid").as(String)
-    csrf_token = generate_response(sid, {":admin/settings"}, HMAC_KEY)
+    csrf_token = Invidious::Helpers::Tokens.generate_response(sid, {":admin/settings"}, HMAC_KEY)
 
     playlists = self.feedable_playlists
     popular = CONFIG.popular_playlists
@@ -53,18 +53,18 @@ module Invidious::Routes::AdminSettings
 
     user = user.as(User)
     if !CONFIG.admins.includes?(user.email)
-      return error_template(403, "Administrator privileges are required to open this page")
+      return Errors.error_template(403, "Administrator privileges are required to open this page")
     end
 
     sid = env.get("sid").as(String)
 
     begin
-      validate_request(env.params.body["csrf_token"]?, sid, env.request, HMAC_KEY, locale)
+      Invidious::Helpers::Tokens.validate_request(env.params.body["csrf_token"]?, sid, env.request, HMAC_KEY, locale)
     rescue ex
-      return error_template(400, ex)
+      return Errors.error_template(400, ex)
     end
 
-    csrf_token = generate_response(sid, {":admin/settings"}, HMAC_KEY)
+    csrf_token = Invidious::Helpers::Tokens.generate_response(sid, {":admin/settings"}, HMAC_KEY)
     playlists = self.feedable_playlists
 
     errors = [] of String

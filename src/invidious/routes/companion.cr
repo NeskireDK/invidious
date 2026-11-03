@@ -1,72 +1,57 @@
 module Invidious::Routes::Companion
-  # GET /companion
-  def self.get_companion(env)
-    url = self.companion_url(env)
-    answering_already_started = false
+  extend self
 
-    begin
-      COMPANION_POOL.client do |wrapper|
-        next if answering_already_started
-        wrapper.client.get(url, env.request.headers) do |resp|
-          answering_already_started = true
-          return self.proxy_companion(env, resp)
-        end
-      end
-    rescue
-    end
+  # GET /companion
+  def get_companion(env)
+    url = make_url(env)
+    proxy_companion(env, "GET", url)
   end
 
   # POST /companion
-  def self.post_companion(env)
-    url = self.companion_url(env)
-    answering_already_started = false
-
-    begin
-      COMPANION_POOL.client do |wrapper|
-        next if answering_already_started
-        wrapper.client.post(url, env.request.headers, env.request.body) do |resp|
-          answering_already_started = true
-          return self.proxy_companion(env, resp)
-        end
-      end
-    rescue
-    end
+  def post_companion(env)
+    url = make_url(env)
+    proxy_companion(env, "POST", url)
   end
 
-  def self.options_companion(env)
-    url = self.companion_url(env)
-    answering_already_started = false
-
-    begin
-      COMPANION_POOL.client do |wrapper|
-        next if answering_already_started
-        wrapper.client.options(url, env.request.headers) do |resp|
-          answering_already_started = true
-          return self.proxy_companion(env, resp)
-        end
-      end
-    rescue
-    end
+  # OPTIONS /companion
+  def options_companion(env)
+    url = make_url(env)
+    proxy_companion(env, "OPTIONS", url)
   end
 
-  private def self.companion_url(env) : String
+  private def make_url(env)
     url = env.request.path
-    url += "?#{env.request.query}" if env.request.query
+    if env.request.query
+      url += "?#{env.request.query}"
+    end
     url
   end
 
-  # Writes companion's reply through to the client.
+  # Writes companion's reply through to the client, at most once per request.
   #
-  # Only ever safe to call once per request: the pool retries its block after a
-  # failure, but the status cannot be set again once the reply is underway, and
-  # re-asking companion would spend a second upstream fetch on a caller that has
-  # usually already gone away.
-  private def self.proxy_companion(env, response)
-    env.response.status_code = response.status_code
-    response.headers.each do |key, value|
-      env.response.headers[key] = value
-    end
+  # The pool retries its block after a failure, but once the reply has started
+  # the status cannot be set again (and neither can a 502), and re-asking
+  # companion would spend a second upstream fetch on a caller that has usually
+  # already gone away.
+  private def proxy_companion(env, method, url)
+    answering_already_started = false
 
-    return IO.copy response.body_io, env.response
+    begin
+      COMPANION_POOL.client do |wrapper|
+        next if answering_already_started
+        wrapper.client.exec(method, url, env.request.headers, (env.request.body if method == "POST")) do |resp|
+          answering_already_started = true
+          env.response.status_code = resp.status_code
+          resp.headers.each do |key, value|
+            env.response.headers[key] = value
+          end
+          return IO.copy resp.body_io, env.response
+        end
+      end
+    rescue
+      return if answering_already_started
+      env.response.headers.clear
+      return Errors.error_json(502, "Couldn't proxy request to Invidious Companion.")
+    end
   end
 end

@@ -1,23 +1,18 @@
 PUBSUB_URL = URI.parse("https://pubsubhubbub.appspot.com")
 
-# See http://www.evanmiller.org/how-not-to-sort-by-average-rating.html
-def ci_lower_bound(pos, n)
-  if n == 0
-    return 0.0
+# 2026-11-01: Add support for locales!
+def video_length_abbreviated(length)
+  if length.days > 0
+    length_abbreviated = "#{length.days} d #{length.hours} hr #{length.minutes} min"
+  elsif length.hours > 0
+    length_abbreviated = "#{length.hours} h #{length.minutes} min"
+  elsif length.minutes > 0
+    length_abbreviated = "#{length.minutes} min"
+  else
+    length_abbreviated = "#{length.seconds} seconds"
   end
 
-  # z value here represents a confidence level of 0.95
-  z = 1.96
-  phat = 1.0*pos/n
-
-  return (phat + z*z/(2*n) - z * Math.sqrt((phat*(1 - phat) + z*z/(4*n))/n))/(1 + z*z/n)
-end
-
-def elapsed_text(elapsed)
-  millis = elapsed.total_milliseconds
-  return "#{millis.round(2)}ms" if millis >= 1
-
-  "#{(millis * 1000).round(2)}µs"
+  length_abbreviated
 end
 
 def decode_length_seconds(string)

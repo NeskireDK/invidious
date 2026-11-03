@@ -55,7 +55,6 @@
     "preferences_volume_label": "Avspillerlydstyrke: ",
     "preferences_comments_label": "Forvalgte kommentarer: ",
     "youtube": "YouTube",
-    "reddit": "Reddit",
     "preferences_captions_label": "Forvalgte undertitler: ",
     "Fallback captions: ": "Tilbakefallsundertitler: ",
     "preferences_related_videos_label": "Vis relaterte videoer? ",
@@ -150,12 +149,10 @@
     "Premieres `x`": "Première `x`",
     "Hi! Looks like you have JavaScript turned off. Click here to view comments, keep in mind they may take a bit longer to load.": "Hei. Det ser ut til at du har JavaScript avslått. Klikk her for å vise kommentarer, ha i minnet at innlasting tar lengre tid.",
     "View YouTube comments": "Vis YouTube-kommentarer",
-    "View more comments on Reddit": "Vis flere kommenterer på Reddit",
     "View `x` comments": {
         "([^.,0-9]|^)1([^.,0-9]|$)": "Vis `x` kommentar",
         "": "Vis `x` kommentarer"
     },
-    "View Reddit comments": "Vis Reddit-kommentarer",
     "Hide replies": "Skjul svar",
     "Show replies": "Vis svar",
     "Incorrect password": "Feil passord",
@@ -358,7 +355,6 @@
     "adminprefs_modified_source_code_url_label": "Nettadresse til kodelager inneholdende endret kildekode",
     "preferences_quality_dash_label": "Foretrukket DASH-videokvalitet: ",
     "preferences_region_label": "Innholdsland: ",
-    "preferences_quality_option_hd720": "HD720",
     "preferences_quality_option_small": "Lav",
     "preferences_quality_dash_option_auto": "Auto",
     "preferences_quality_dash_option_best": "Best",
@@ -506,5 +502,11 @@
     "timeline_parse_error_placeholder_message": "Invidious traff på en feil under parsingen av dette elementet. For mer informasjon, se under:",
     "timeline_parse_error_show_technical_details": "Vis tekniske detaljer",
     "Livestreams": "Direktesendinger",
-    "dmca_content": "Denne siden kan ikke lastes ned fra denne instansen på grunn av et DMCA/brev om opphavsrettsbrudd sendt til instansadministratoren."
+    "dmca_content": "Denne siden kan ikke lastes ned fra denne instansen på grunn av et DMCA/brev om opphavsrettsbrudd sendt til instansadministratoren.",
+    "preferences_search_privacy_label": "Privat søk: ",
+    "preferences_search_privacy_description": "Å skru på denne innstillingen vil hindre søkene dine i å lagres i nettleserhistorikken din.",
+    "comments_youtube_disabled_text": "Youtube-kommentarer er skrudd av på denne videoen",
+    "comments_youtube_disabled_try_reddit": "Prøv reddit-kommentarer?",
+    "comments_invidious_disabled_text": "Kommentarene er gjemt på grunn av innstillingene dine",
+    "comments_youtube_disabled_try_reddit_no_js": "Hei! Det er ut som du har skrudd av JavaScript. Selv om den som har lastet opp videoen har skrudd av YouTube-kommentarer kan du fortsatt klikke her for å prøve å se Reddit-kommentarer, men de kan ta litt lenger tid å laste inn."
 }
