@@ -96,13 +96,13 @@ module Invidious::TrustedHeaderAuth
   # view's own marker and rebuilds what disagrees.
   private def provision_user(email : String)
     random_password = Base64.urlsafe_encode(Random::Secure.random_bytes(32))
-    user, _ = create_user("", email, random_password)
+    user, _ = Invidious::User::Users.create_user("", email, random_password)
 
     Invidious::Database::Users.insert(user, update_on_conflict: true)
 
     view_name = "subscriptions_#{sha256(user.email)}"
     begin
-      create_subscription_view(PG_DB, view_name, user.email)
+      Invidious::User::Users.create_subscription_view(PG_DB, view_name, user.email)
     rescue ex
       LOGGER.debug("TrustedHeaderAuth: cannot create #{view_name} (#{ex.message})")
     end

@@ -50,7 +50,7 @@ jobs:
           - 1.19.2
           - 1.20.3
           - 1.21.1
-          - 1.22.0
+          - 1.22.2
         include:
           - crystal: nightly
             stable: false
@@ -66,7 +66,7 @@ jobs:
         shell: bash
 
       - name: Install Crystal
-        uses: crystal-lang/install-crystal@v1.9.3
+        uses: crystal-lang/install-crystal@v1.9.4
         with:
           crystal: ${{ matrix.crystal }}
 
@@ -85,7 +85,7 @@ jobs:
           fi
 
       - name: Run tests
-        run: crystal spec
+        run: crystal spec -v
 
       - name: Build
         run: crystal build --warnings all --error-on-warnings --stats --time --progress --error-trace src/invidious.cr
@@ -138,9 +138,9 @@ jobs:
 
       - name: Install Crystal
         id: lint_step_install_crystal
-        uses: crystal-lang/install-crystal@v1.9.3
+        uses: crystal-lang/install-crystal@v1.9.4
         with:
-          crystal: 1.22.0
+          crystal: 1.22.2
 
       - name: Cache Shards
         uses: actions/cache@v6

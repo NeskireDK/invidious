@@ -126,6 +126,7 @@ module Invidious::Routing
     get "/channel/:ucid/podcasts", Routes::Channels, :podcasts
     get "/channel/:ucid/releases", Routes::Channels, :releases
     get "/channel/:ucid/courses", Routes::Channels, :courses
+    get "/channel/:ucid/shows", Routes::Channels, :shows
     get "/channel/:ucid/playlists", Routes::Channels, :playlists
     get "/channel/:ucid/community", Routes::Channels, :community
     get "/channel/:ucid/posts", Routes::Channels, :community
@@ -148,6 +149,9 @@ module Invidious::Routing
     # /user/linustechtips (Not always the same as /c/)
     get "/user/:user", Routes::Channels, :brand_redirect
     get "/user/:user/:tab", Routes::Channels, :brand_redirect
+
+    # /linuxtechtips/streams
+    get "/:user/:tab", Routes::Channels, :potential_brand_redirect
 
     # /@LinusTechTips (Handle)
     get "/@:user", Routes::Channels, :brand_redirect
@@ -181,6 +185,7 @@ module Invidious::Routing
 
   def register_yt_playlist_routes
     get "/playlist", Routes::Playlists, :show
+    get "/show/:id", Routes::Playlists, :show
     get "/mix", Routes::Playlists, :mix
     get "/watch_videos", Routes::Playlists, :watch_videos
   end
@@ -269,6 +274,7 @@ module Invidious::Routing
       get "/api/v1/channels/:ucid/podcasts", {{ namespace }}::Channels, :podcasts
       get "/api/v1/channels/:ucid/releases", {{ namespace }}::Channels, :releases
       get "/api/v1/channels/:ucid/courses", {{ namespace }}::Channels, :courses
+      get "/api/v1/channels/:ucid/shows", {{ namespace }}::Channels, :shows
       get "/api/v1/channels/:ucid/playlists", {{ namespace }}::Channels, :playlists
       get "/api/v1/channels/:ucid/community", {{ namespace }}::Channels, :community
       get "/api/v1/channels/:ucid/posts", {{ namespace }}::Channels, :community
