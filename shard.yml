@@ -1,5 +1,5 @@
 name: invidious
-version: 2.20261103.0-dev
+version: 2.20261114.0
 
 authors:
   - Invidious team <contact@invidious.io>
@@ -29,10 +29,10 @@ dependencies:
     version: ~> 0.1.5
   athena-negotiation:
     github: athena-framework/negotiation
-    version: ~> 0.1.1
+    version: ~> 0.2.0
   http_proxy:
     github: mamantoha/http_proxy
-    version: ~> 0.10.3
+    version: ~> 0.17.0
 
 development_dependencies:
   spectator:

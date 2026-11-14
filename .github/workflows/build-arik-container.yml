@@ -19,9 +19,9 @@ jobs:
         run: sudo apt install -y libsqlite3-dev
 
       - name: Install Crystal
-        uses: crystal-lang/install-crystal@v1.9.2
+        uses: crystal-lang/install-crystal@v1.9.5
         with:
-          crystal: 1.22.2
+          crystal: 1.22.3
 
       - name: Cache Shards
         uses: actions/cache@v6
@@ -74,9 +74,9 @@ jobs:
         shell: bash
 
       - name: Install Crystal
-        uses: crystal-lang/install-crystal@v1.9.2
+        uses: crystal-lang/install-crystal@v1.9.5
         with:
-          crystal: 1.22.2
+          crystal: 1.22.3
 
       - name: Cache Shards
         uses: actions/cache@v6
