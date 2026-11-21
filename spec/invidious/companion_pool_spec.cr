@@ -3,12 +3,15 @@ require "../parsers_helper"
 require "socket"
 require "../../src/invidious/yt_backend/socks_proxy"
 require "../../src/invidious/yt_backend/connection_pool"
+require "../../src/invidious/routes/companion"
 
 # A keep-alive HTTP server that can answer late, so a spec can walk away from a
 # request and then assert what the *next* request on the same pooled socket
 # reads back.
 class MockCompanion
   LATE_REPLY_DELAY = 0.5.seconds
+  PROMISED_SEGMENT_BYTES = 100_000
+  BYTES_SENT_BEFORE_BREAKING_OFF = 20_000
 
   @@instances = [] of MockCompanion
 
@@ -50,6 +53,7 @@ class MockCompanion
       while (header = socket.gets) && !header.empty?
       end
       write_response(socket, request_line)
+      break if request_line.includes?("/breaks-off")
     end
   rescue IO::Error
   ensure
@@ -57,6 +61,10 @@ class MockCompanion
   end
 
   private def write_response(socket, request_line)
+    if request_line.includes?("/breaks-off")
+      return write_reply_that_breaks_off(socket, request_line)
+    end
+
     if request_line.includes?("/late")
       sleep LATE_REPLY_DELAY
       body, content_type = "a segment", "video/mp4"
@@ -69,6 +77,17 @@ class MockCompanion
     socket << "Content-Length: #{body.bytesize}\r\n"
     socket << "Connection: keep-alive\r\n\r\n"
     socket << body
+    socket.flush
+  end
+
+  private def write_reply_that_breaks_off(socket, request_line)
+    bytes_before_breaking_off = request_line.includes?("/breaks-off-mid-body") ? BYTES_SENT_BEFORE_BREAKING_OFF : 0
+
+    socket << "HTTP/1.1 206 Partial Content\r\n"
+    socket << "Content-Type: video/mp4\r\n"
+    socket << "Content-Length: #{PROMISED_SEGMENT_BYTES}\r\n"
+    socket << "Connection: keep-alive\r\n\r\n"
+    socket << "x" * bytes_before_breaking_off
     socket.flush
   end
 end
@@ -174,5 +193,46 @@ Spectator.describe CompanionConnectionPool do
     expect { abort_mid_response(pool) }.to raise_error(/the player went away/)
 
     expect(get(pool, "/healthz")).to eq("ok")
+  end
+end
+
+Spectator.describe Invidious::Routes::Companion do
+  after_each do
+    MockCompanion.close_all
+    CONFIG.invidious_companion = [] of Config::CompanionConfig
+  end
+
+  def player_request_context(reply_written_to : IO) : HTTP::Server::Context
+    request = HTTP::Request.new("GET", "/companion/videoplayback")
+    HTTP::Server::Context.new(request, HTTP::Server::Response.new(reply_written_to))
+  end
+
+  def relay_from(companion_path : String, reply_written_to : IO = IO::Memory.new)
+    companion = MockCompanion.new
+    CONFIG.invidious_companion = [
+      Config::CompanionConfig.from_yaml("private_url: #{companion.private_url}"),
+    ]
+    pool = CompanionConnectionPool.new(capacity: 1)
+    context = player_request_context(reply_written_to)
+    Invidious::Routes::Companion.relay(pool, context, "GET", companion_path)
+    context.response.close
+  end
+
+  # Returning quietly here is what left players waiting forever: the server
+  # keeps the connection open, still owing the bytes the headers promised.
+  it "raises when a segment breaks off part-way through its body" do
+    expect { relay_from("/breaks-off-mid-body") }.to raise_error(IO::Error, /broke off/)
+  end
+
+  it "raises when a segment breaks off before any of its body" do
+    expect { relay_from("/breaks-off-before-body") }.to raise_error(IO::Error, /broke off/)
+  end
+
+  it "passes a complete reply through untouched" do
+    player_sees = IO::Memory.new
+    relay_from("/healthz", player_sees)
+
+    expect(player_sees.to_s).to start_with("HTTP/1.1 200 OK")
+    expect(player_sees.to_s).to end_with("\r\n\r\nok")
   end
 end
